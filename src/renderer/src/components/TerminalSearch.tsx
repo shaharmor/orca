@@ -145,7 +145,7 @@ export default function TerminalSearch({
   const matchStatus = !requestQuery
     ? '0/0'
     : results.resultCount === 0
-      ? translate('auto.components.TerminalSearch.noResults', 'No results')
+      ? translate('auto.components.TerminalSearch.10e039b591', 'No results')
       : results.resultIndex === -1
         ? `${results.resultCount}+`
         : `${results.resultIndex + 1}/${results.resultCount}`
