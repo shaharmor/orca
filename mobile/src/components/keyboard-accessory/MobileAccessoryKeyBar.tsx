@@ -43,6 +43,9 @@ export function MobileAccessoryKeyBar({
                 isDisabled && styles.accessoryKeyDisabled
               ]}
               disabled={isDisabled}
+              accessibilityRole="button"
+              // Why: announce sticky modifier state so assistive tech reads active keys as selected.
+              accessibilityState={{ disabled: isDisabled, selected: key.active }}
               onPress={key.onPress}
               onPressIn={key.onPressIn}
               onPressOut={key.onPressOut}
