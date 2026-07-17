@@ -1100,6 +1100,22 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     sgrMousePixelsMode: false
   };
 
+  // Why: main-buffer full-screen TUIs (e.g. the Pi agent) render footer/status
+  // rows below the caret, so anchor keyboard avoidance on the last non-blank
+  // viewport row (0..rows-1), not just cursorY. See terminal-keyboard-avoidance-lift.ts.
+  function computeContentBottomRow() {
+    if (!term || !term.buffer || !term.buffer.active) return 0;
+    var buffer = term.buffer.active;
+    var top = buffer.viewportY || 0;
+    for (var y = (term.rows || 0) - 1; y >= 0; y--) {
+      try {
+        var line = buffer.getLine(top + y);
+        if (line && line.translateToString(true).length > 0) return y;
+      } catch (e) {}
+    }
+    return 0;
+  }
+
   function emitKeyboardAvoidanceMetrics() {
     if (!term) return;
     var alt = false;
@@ -1107,6 +1123,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     notify({
       type: 'keyboard-avoidance-metrics',
       cursorY: term.buffer && term.buffer.active ? term.buffer.active.cursorY : 0,
+      contentBottomRow: computeContentBottomRow(),
       rows: term.rows || 0,
       altScreen: alt
     });
