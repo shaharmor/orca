@@ -124,8 +124,9 @@ export default function RootLayout() {
         return
       }
       if (path) {
-        // withAnchor: from-root push must anchor on Host (see app/h/_layout.tsx).
-        router.push(path, { withAnchor: true })
+        // Anchor only below the host index: a bare /h/<host> tap already targets it, so anchoring would stack Host twice (see app/h/_layout.tsx).
+        const belowHostIndex = path.split('/').length > 3
+        router.push(path, belowHostIndex ? { withAnchor: true } : undefined)
       }
     }
 
