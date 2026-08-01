@@ -13,6 +13,15 @@ import {
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from './[hostId]/index'
 
+// Why: anchor the /h group to the Host screen so deep pushes from outside the
+// group (Home Screen resume/accounts, notification taps) land on the target
+// route with the Host screen underneath. Without an anchor a from-root push
+// falls back to this group's default [hostId]/index screen. Callers pass
+// { withAnchor: true } so the anchor is loaded during in-app navigation too.
+export const unstable_settings = {
+  initialRouteName: '[hostId]/index'
+}
+
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
 const RESIZE_EDGE_WIDTH = 24

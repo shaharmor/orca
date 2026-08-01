@@ -808,12 +808,14 @@ export default function HomeScreen() {
                   <Pressable
                     style={({ pressed }) => [styles.resumeCard, pressed && styles.hostCardPressed]}
                     onPress={() =>
+                      // withAnchor: from-root push must anchor on Host (see app/h/_layout.tsx).
                       router.push(
                         createMobileSessionHref({
                           hostId: resumeWorktree.hostId,
                           worktreeId: resumeWorktree.worktree.worktreeId,
                           name: resumeWorktree.worktree.displayName || resumeWorktree.worktree.repo
-                        })
+                        }),
+                        { withAnchor: true }
                       )
                     }
                   >
@@ -903,7 +905,7 @@ export default function HomeScreen() {
                           styles.accountsCard,
                           pressed && styles.hostCardPressed
                         ]}
-                        onPress={() => router.push(`/h/${host.id}/accounts`)}
+                        onPress={() => router.push(`/h/${host.id}/accounts`, { withAnchor: true })}
                       >
                         {showHostName ? (
                           <Text style={styles.accountsHostLabel} numberOfLines={1}>

@@ -124,7 +124,8 @@ export default function RootLayout() {
         return
       }
       if (path) {
-        router.push(path)
+        // withAnchor: from-root push must anchor on Host (see app/h/_layout.tsx).
+        router.push(path, { withAnchor: true })
       }
     }
 
