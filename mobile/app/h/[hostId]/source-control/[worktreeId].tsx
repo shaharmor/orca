@@ -22,7 +22,9 @@ export default function MobileSourceControlScreen() {
       initialTab={parseSourceControlHubTab(params.tab)}
       embedded={false}
       // Full-screen route can't reach the session's tab activation; hand the opened
-      // diff to the session (origin:'session' only) so it switches on focus after pop.
+      // diff to the session so it switches on focus after pop. Safe to wire
+      // unconditionally: the opener only calls onOpenedFileDiff for origin:'session'
+      // (non-session origins early-return before the openDiff RPC).
       onOpenedFileDiff={(relativePath) =>
         recordPendingSourceControlDiffOpen({ worktreeId, relativePath })
       }
