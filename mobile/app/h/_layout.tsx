@@ -13,11 +13,7 @@ import {
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from './[hostId]/index'
 
-// Why: anchor the /h group to the Host screen so deep pushes from outside the
-// group (Home Screen resume/accounts, notification taps) land on the target
-// route with the Host screen underneath. Without an anchor a from-root push
-// falls back to this group's default [hostId]/index screen. Callers pass
-// { withAnchor: true } so the anchor is loaded during in-app navigation too.
+// Anchor the /h group to Host so from-root deep pushes (Home cards, notification taps) land on the target, not the group's default index.
 export const unstable_settings = {
   initialRouteName: '[hostId]/index'
 }

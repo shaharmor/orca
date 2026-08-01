@@ -1,13 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-// Why: pushing a deep /h/[hostId]/... route from outside the group (the Home
-// Screen resume/account cards, notification taps) lands on the group's default
-// [hostId]/index ("Host") screen instead of the target — cold Expo deep links
-// resolve to the group index (see coordinateMobileTasksNavigation, which works
-// around the same issue for Tasks). The fix pairs an initialRouteName anchor on
-// the /h group with withAnchor on each from-root push. Native-stack focus can
-// only be verified on-device, so these guards keep both halves in place.
+// Source-text guards (native-stack focus is only verifiable on-device) that keep both halves of the fix in place: the /h anchor and withAnchor on each from-root push.
 function readApp(relativePath: string): string {
   return readFileSync(new URL(`../../app/${relativePath}`, import.meta.url), 'utf8')
 }
@@ -17,8 +11,7 @@ function pushCall(source: string, marker: string): string {
   expect(markerIndex).toBeGreaterThanOrEqual(0)
   const openParen = source.indexOf('(', source.lastIndexOf('router.push', markerIndex))
   expect(openParen).toBeGreaterThanOrEqual(0)
-  // Why: the resume push nests createMobileSessionHref({...}), so match balanced
-  // parens rather than stopping at the first ')'.
+  // Match balanced parens: the resume push nests createMobileSessionHref({...}).
   let depth = 0
   for (let i = openParen; i < source.length; i++) {
     if (source[i] === '(') {
