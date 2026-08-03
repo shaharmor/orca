@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
 describe('parseTerminalKeyboardAvoidanceMetrics', () => {
-  it('coerces a full payload', () => {
+  it('parses a full payload', () => {
     expect(
       parseTerminalKeyboardAvoidanceMetrics({
         cursorY: 30,
@@ -30,5 +30,23 @@ describe('parseTerminalKeyboardAvoidanceMetrics', () => {
       rows: 0,
       altScreen: false
     })
+  })
+
+  it('bounds untrusted numeric fields to the reported viewport', () => {
+    expect(
+      parseTerminalKeyboardAvoidanceMetrics({
+        cursorY: Number.POSITIVE_INFINITY,
+        contentBottomRow: 99.8,
+        rows: 40.7,
+        altScreen: 'true'
+      })
+    ).toEqual({ cursorY: 0, contentBottomRow: 39, rows: 40, altScreen: false })
+    expect(
+      parseTerminalKeyboardAvoidanceMetrics({
+        cursorY: -4,
+        contentBottomRow: Number.NaN,
+        rows: -1
+      })
+    ).toEqual({ cursorY: 0, contentBottomRow: 0, rows: 0, altScreen: false })
   })
 })

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { computeActiveTerminalKeyboardLift } from './terminal-keyboard-avoidance-lift'
+import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 import type { TerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
-// rowHeight = 800 / 40 = 20px; dockTop = 800 - 300 = 500px
 const FRAME_HEIGHT = 800
 const ROWS = 40
 const KEYBOARD_LIFT = 300
@@ -62,19 +62,19 @@ describe('computeActiveTerminalKeyboardLift', () => {
     ).toBe(KEYBOARD_LIFT)
   })
 
-  it('anchors on the footer, not the caret, for a main-buffer full-screen TUI (Pi)', () => {
-    // Caret at row 30, footer/status chrome down to row 34.
-    const lift = computeActiveTerminalKeyboardLift({
+  it('clears a main-buffer footer while an old payload retains cursor-only behavior', () => {
+    const candidate = computeActiveTerminalKeyboardLift({
       keyboardLift: KEYBOARD_LIFT,
       metrics: metrics({ cursorY: 30, contentBottomRow: 34 }),
       terminalFrameHeight: FRAME_HEIGHT
     })
-    // anchorBottom = (34+1)*20 = 700; 700 + 20 - 500 = 220
-    expect(lift).toBe(220)
-    // Regression guard: cursor-only anchoring would under-lift and leave the
-    // footer under the keyboard.
-    const cursorOnly = (30 + 1) * 20 + 20 - 500
-    expect(lift).toBeGreaterThan(cursorOnly)
+    const oldPayload = parseTerminalKeyboardAvoidanceMetrics({ cursorY: 30, rows: ROWS })
+    const cursorOnly = computeActiveTerminalKeyboardLift({
+      keyboardLift: KEYBOARD_LIFT,
+      metrics: oldPayload,
+      terminalFrameHeight: FRAME_HEIGHT
+    })
+    expect({ candidate, cursorOnly }).toEqual({ candidate: 220, cursorOnly: 140 })
   })
 
   it('keeps short output near the top put (no lift)', () => {
@@ -88,13 +88,11 @@ describe('computeActiveTerminalKeyboardLift', () => {
   })
 
   it('matches cursor-clearing behavior for a scrolled shell (prompt at the bottom)', () => {
-    // Prompt/caret is the last content row.
     const lift = computeActiveTerminalKeyboardLift({
       keyboardLift: KEYBOARD_LIFT,
       metrics: metrics({ cursorY: 38, contentBottomRow: 38 }),
       terminalFrameHeight: FRAME_HEIGHT
     })
-    // anchorBottom = 39*20 = 780; 780 + 20 - 500 = 300, clamped to keyboardLift
     expect(lift).toBe(KEYBOARD_LIFT)
   })
 
@@ -105,5 +103,20 @@ describe('computeActiveTerminalKeyboardLift', () => {
       terminalFrameHeight: FRAME_HEIGHT
     })
     expect(lift).toBeLessThanOrEqual(KEYBOARD_LIFT)
+  })
+
+  it('uses the platform-adjusted lift proportionally on iOS and Android', () => {
+    const tuiMetrics = metrics({ cursorY: 30, contentBottomRow: 34 })
+    const android = computeActiveTerminalKeyboardLift({
+      keyboardLift: 300,
+      metrics: tuiMetrics,
+      terminalFrameHeight: FRAME_HEIGHT
+    })
+    const ios = computeActiveTerminalKeyboardLift({
+      keyboardLift: 266,
+      metrics: tuiMetrics,
+      terminalFrameHeight: FRAME_HEIGHT
+    })
+    expect({ android, ios }).toEqual({ android: 220, ios: 186 })
   })
 })

@@ -14,26 +14,32 @@ export type TerminalModes = {
 
 export type TerminalKeyboardAvoidanceMetrics = {
   cursorY: number
-  // Why: last non-blank viewport row (0-based). Full-screen TUIs in the main
-  // buffer (e.g. the Pi agent) render footer/status rows below the caret, so
-  // keyboard avoidance anchors on this, not just cursorY. See worktreeId.tsx.
+  // Main-buffer TUIs can render footer rows below the caret.
   contentBottomRow: number
   rows: number
   altScreen: boolean
 }
 
-// Why: coerce the raw WebView keyboard-avoidance payload into typed metrics.
-// contentBottomRow defaults to cursorY so older WebView bundles keep working.
 export function parseTerminalKeyboardAvoidanceMetrics(
   msg: Record<string, unknown>
 ): TerminalKeyboardAvoidanceMetrics {
-  const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
+  const rows = toNonNegativeInteger(msg.rows)
+  const maxRow = Math.max(0, rows - 1)
+  const cursorY = Math.min(toNonNegativeInteger(msg.cursorY), maxRow)
+  const contentBottomRow =
+    msg.contentBottomRow === undefined
+      ? cursorY
+      : Math.min(toNonNegativeInteger(msg.contentBottomRow), maxRow)
   return {
     cursorY,
-    contentBottomRow: typeof msg.contentBottomRow === 'number' ? msg.contentBottomRow : cursorY,
-    rows: typeof msg.rows === 'number' ? msg.rows : 0,
-    altScreen: !!msg.altScreen
+    contentBottomRow,
+    rows,
+    altScreen: msg.altScreen === true
   }
+}
+
+function toNonNegativeInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
 }
 
 export type MobileTerminalTheme = RuntimeMobileTerminalTheme
