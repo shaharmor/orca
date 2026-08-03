@@ -1,6 +1,6 @@
 export const TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS = `
   function lineHasVisibleContent(line, cell) {
-    if (line.translateToString(true).length > 0) return true;
+    if (line.translateToString(true).trim().length > 0) return true;
     if (!cell || !line.getCell) return false;
     var limit = Math.min(term.cols || 0, line.length || 0);
     for (var x = 0; x < limit; x++) {

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { Script } from 'node:vm'
+import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
 
@@ -47,6 +48,21 @@ function runMetrics(lines: Array<ReturnType<typeof makeLine> | undefined>, altSc
   return notifications[0]
 }
 
+function runTerminalMetrics(term: Terminal) {
+  const notifications: Array<Record<string, unknown>> = []
+  new Script(
+    `${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}\nemitKeyboardAvoidanceMetrics();`
+  ).runInNewContext({
+    notify: (message: Record<string, unknown>) => notifications.push(message),
+    term
+  })
+  return notifications[0]
+}
+
+function write(term: Terminal, data: string): Promise<void> {
+  return new Promise((resolve) => term.write(data, resolve))
+}
+
 describe('terminal keyboard-avoidance WebView metrics', () => {
   it('finds text on wrapped rows using the visible viewport offset', () => {
     const lines = [makeLine('header'), makeLine(''), makeLine('wrapped footer')]
@@ -61,6 +77,25 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     expect(runMetrics([makeLine('header'), makeLine(''), makeLine('', [4])])).toMatchObject({
       contentBottomRow: 2
     })
+  })
+
+  it('ignores real xterm default spaces but keeps visible rows', async () => {
+    const cases = [
+      { data: '     ', expected: 0 },
+      { data: 'footer', expected: 7 },
+      { data: '\x1b[41m     \x1b[0m', expected: 7 },
+      { data: '\x1b[7m     \x1b[0m', expected: 7 }
+    ]
+
+    for (const { data, expected } of cases) {
+      const term = new Terminal({ cols: 10, rows: 8 })
+      try {
+        await write(term, `\x1b[8;1H${data}`)
+        expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: expected })
+      } finally {
+        term.dispose()
+      }
+    }
   })
 
   it('stops at the first bottom-up match and skips scans on alternate screen', () => {
