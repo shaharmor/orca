@@ -107,6 +107,7 @@ import type {
   TerminalWebViewHandle
 } from '../../../../src/terminal/terminal-webview-contract'
 import { isTerminalOscLinkRanges } from '../../../../src/terminal/terminal-osc-link-ranges'
+import { computeActiveTerminalKeyboardLift } from '../../../../src/terminal/terminal-keyboard-avoidance-lift'
 import { useTerminalViewportRefit } from '../../../../src/terminal/terminal-viewport-refit'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
@@ -117,10 +118,10 @@ import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/termi
 import { sendTerminalLiveAccessoryRawBytes } from '../../../../src/terminal/terminal-live-accessory-raw-send'
 import {
   clearTerminalLiveInputFocusTimer,
-  focusTerminalLiveInputTarget,
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import { useTerminalLiveInputFocus } from '../../../../src/terminal/use-terminal-live-input-focus'
 import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
@@ -267,8 +268,8 @@ import {
   reconcileMobileSessionCreateWarningState
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing } from '../../../../src/theme/mobile-theme'
-import { styles } from './mobile-session-styles'
-import { QuickCommandsTabButton } from './QuickCommandsTabButton'
+import { QuickCommandsTabButton } from '../../../../src/session/QuickCommandsTabButton'
+import { styles } from '../../../../src/session/mobile-session-styles'
 import type { DiffComment, TerminalQuickCommand } from '../../../../../src/shared/types'
 import type {
   DiffCommentActions,
@@ -289,7 +290,7 @@ import type {
   TerminalCreateResult,
   TerminalGestureInputBucket,
   TerminalGestureInputQueue
-} from './mobile-session-route-types'
+} from '../../../../src/session/mobile-session-route-types'
 
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
@@ -1082,6 +1083,22 @@ export default function SessionScreen() {
     activeSessionTabType: activeSessionTab?.type
   })
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
+  const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
+    activeHandleRef,
+    canSend,
+    inputRef: liveInputRef,
+    keyboardHeight,
+    lifecycleIdentity: client,
+    lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
+    liveInputEnabled,
+    timerRef: liveInputFocusTimerRef
+  })
+  useFocusEffect(
+    useCallback(() => {
+      // Expo retains this route while pushed screens are visible.
+      return resetLiveInputFocus
+    }, [resetLiveInputFocus])
+  )
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
   // Why: hosts without aiVault.v1 reject listSessions, so hide the header entry instead of a dead-end "update this host" panel.
   const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
@@ -3092,17 +3109,6 @@ export default function SessionScreen() {
   )
   sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
-  const focusLiveInput = useCallback(() => {
-    if (!canSend || !liveInputEnabled) {
-      return
-    }
-    focusTerminalLiveInputTarget(liveInputRef.current, {
-      keyboardHeight,
-      refocus: () =>
-        scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
-    })
-  }, [canSend, keyboardHeight, liveInputEnabled])
-
   const clearSessionTabActionSheetKeyboardListener = useCallback(() => {
     sessionTabActionSheetKeyboardHideSubRef.current?.remove()
     sessionTabActionSheetKeyboardHideSubRef.current = null
@@ -3176,16 +3182,6 @@ export default function SessionScreen() {
       liveInput: liveInputRef.current
     })
   }, [])
-
-  const handleTerminalTap = useCallback(
-    (handle: string) => {
-      if (handle !== activeHandleRef.current) {
-        return
-      }
-      focusLiveInput()
-    },
-    [focusLiveInput]
-  )
 
   // Tap a terminal file path → resolve on host, open as file tab (mirrors desktop Cmd/Ctrl-click); silent on a miss.
   const handleFileTapActivationSeqRef = useRef(0)
@@ -3595,6 +3591,7 @@ export default function SessionScreen() {
         if (
           current &&
           current.cursorY === metrics.cursorY &&
+          current.contentBottomRow === metrics.contentBottomRow &&
           current.rows === metrics.rows &&
           current.altScreen === metrics.altScreen
         ) {
@@ -4276,24 +4273,11 @@ export default function SessionScreen() {
         ? Math.max(0, keyboardHeight - insets.bottom)
         : keyboardHeight
       : 0
-  const activeTerminalKeyboardLift = (() => {
-    if (keyboardLift <= 0 || !activeHandle) {
-      return 0
-    }
-    const metrics = terminalKeyboardMetrics.get(activeHandle)
-    if (!metrics || metrics.rows <= 0 || terminalFrameHeightRef.current <= 0) {
-      return keyboardLift
-    }
-    if (metrics.altScreen) {
-      return keyboardLift
-    }
-    const rowHeight = terminalFrameHeightRef.current / metrics.rows
-    const cursorBottom = (metrics.cursorY + 1) * rowHeight
-    const dockTop = terminalFrameHeightRef.current - keyboardLift
-    const margin = rowHeight
-    // Why: only move the terminal when the cursor would sit under the raised input dock; short top output stays put.
-    return Math.min(keyboardLift, Math.max(0, cursorBottom + margin - dockTop))
-  })()
+  const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
+    keyboardLift,
+    metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
+    terminalFrameHeight: terminalFrameHeightRef.current
+  })
   const toastAnimatedStyle = {
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }]
