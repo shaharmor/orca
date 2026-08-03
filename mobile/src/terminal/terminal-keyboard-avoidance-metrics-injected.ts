@@ -5,7 +5,11 @@ export const TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS = `
     var limit = Math.min(term.cols || 0, line.length || 0);
     for (var x = 0; x < limit; x++) {
       var current = line.getCell(x, cell);
-      if (current && (!current.isBgDefault() || current.isInverse())) return true;
+      if (!current) continue;
+      if (!current.isBgDefault() || current.isInverse()) return true;
+      if (typeof current.isUnderline === 'function' && current.isUnderline()) return true;
+      if (typeof current.isStrikethrough === 'function' && current.isStrikethrough()) return true;
+      if (typeof current.isOverline === 'function' && current.isOverline()) return true;
     }
     return false;
   }

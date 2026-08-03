@@ -3,6 +3,7 @@ import { Script } from 'node:vm'
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
+import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
 const terminalHtmlSource = readFileSync(
   new URL('./terminal-webview-html.ts', import.meta.url),
@@ -14,6 +15,13 @@ const reflowSource = readFileSync(
 )
 
 type Cell = { isBgDefault: () => boolean; isInverse: () => number }
+type MetricsNotification = {
+  type: string
+  cursorY: number
+  contentBottomRow: number
+  rows: number
+  altScreen: boolean
+}
 
 function makeLine(text = '', styledColumns: number[] = []) {
   const styled = new Set(styledColumns)
@@ -28,8 +36,8 @@ function makeLine(text = '', styledColumns: number[] = []) {
   }
 }
 
-function runMetrics(lines: Array<ReturnType<typeof makeLine> | undefined>, altScreen = false) {
-  const notifications: Array<Record<string, unknown>> = []
+function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScreen = false) {
+  const notifications: Record<string, unknown>[] = []
   const buffer = {
     cursorY: 2,
     viewportY: 3,
@@ -45,18 +53,18 @@ function runMetrics(lines: Array<ReturnType<typeof makeLine> | undefined>, altSc
   new Script(
     `${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}\nemitKeyboardAvoidanceMetrics();`
   ).runInNewContext(context)
-  return notifications[0]
+  return notifications[0] as MetricsNotification
 }
 
 function runTerminalMetrics(term: Terminal) {
-  const notifications: Array<Record<string, unknown>> = []
+  const notifications: Record<string, unknown>[] = []
   new Script(
     `${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}\nemitKeyboardAvoidanceMetrics();`
   ).runInNewContext({
     notify: (message: Record<string, unknown>) => notifications.push(message),
     term
   })
-  return notifications[0]
+  return notifications[0] as MetricsNotification
 }
 
 function write(term: Terminal, data: string): Promise<void> {
@@ -70,7 +78,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     expect(runMetrics(lines)).toMatchObject({ contentBottomRow: 2 })
   })
 
-  it('ignores blank rows but keeps background-only ANSI chrome visible', () => {
+  it('supports cells without decoration APIs and keeps background-only ANSI chrome visible', () => {
     expect(runMetrics([makeLine('header'), makeLine(''), makeLine('')])).toMatchObject({
       contentBottomRow: 0
     })
@@ -79,20 +87,91 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     })
   })
 
-  it('ignores real xterm default spaces but keeps visible rows', async () => {
+  it('classifies real xterm text and styled whitespace by rendered visibility', async () => {
     const cases = [
-      { data: '     ', expected: 0 },
-      { data: 'footer', expected: 7 },
-      { data: '\x1b[41m     \x1b[0m', expected: 7 },
-      { data: '\x1b[7m     \x1b[0m', expected: 7 }
+      { name: 'default spaces', data: '     ', expected: 0 },
+      { name: 'text', data: 'footer', expected: 7 },
+      { name: 'background', data: '\x1b[41m     \x1b[0m', expected: 7 },
+      { name: 'inverse', data: '\x1b[7m     \x1b[0m', expected: 7 },
+      { name: 'underline', data: '\x1b[4m     \x1b[0m', expected: 7 },
+      { name: 'strikethrough', data: '\x1b[9m     \x1b[0m', expected: 7 },
+      { name: 'overline', data: '\x1b[53m     \x1b[0m', expected: 7 },
+      // Hidden text still reserves TUI layout, so keyboard avoidance treats it as content.
+      { name: 'invisible text', data: '\x1b[8mfooter\x1b[0m', expected: 7 }
     ]
 
-    for (const { data, expected } of cases) {
+    for (const { name, data, expected } of cases) {
       const term = new Terminal({ cols: 10, rows: 8 })
       try {
         await write(term, `\x1b[8;1H${data}`)
-        expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: expected })
+        expect(runTerminalMetrics(term), name).toMatchObject({ contentBottomRow: expected })
       } finally {
+        term.dispose()
+      }
+    }
+  })
+
+  it('tracks the real xterm viewport and alternate screen', async () => {
+    const term = new Terminal({ cols: 10, rows: 4, scrollback: 100 })
+    try {
+      await write(term, 'header\r\n\r\n\r\n\r\nfooter')
+      expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: 3, altScreen: false })
+      term.scrollLines(-2)
+      expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: 0, altScreen: false })
+      await write(term, '\x1b[?1049h\x1b[4m     \x1b[0m')
+      expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: 0, altScreen: true })
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('follows real xterm resize and reset state', async () => {
+    const term = new Terminal({ cols: 10, rows: 8 })
+    try {
+      await write(term, '\x1b[8;1Hfooter')
+      expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: 7 })
+      term.resize(10, 4)
+      expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: 3 })
+      term.reset()
+      expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: 0 })
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('keeps real xterm metrics compatible with old payloads', async () => {
+    const term = new Terminal({ cols: 10, rows: 8 })
+    try {
+      await write(term, '\x1b[8;1Hfooter\x1b[2;1H')
+      const { cursorY, rows, altScreen } = runTerminalMetrics(term)
+      expect(parseTerminalKeyboardAvoidanceMetrics({ cursorY, rows, altScreen })).toEqual({
+        cursorY: 1,
+        contentBottomRow: 1,
+        rows: 8,
+        altScreen: false
+      })
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('releases real xterm metric observers across terminal lifecycles', async () => {
+    for (let cycle = 0; cycle < 25; cycle += 1) {
+      const term = new Terminal({ cols: 10, rows: 4 })
+      let emissions = 0
+      const observer = term.onWriteParsed(() => {
+        runTerminalMetrics(term)
+        emissions += 1
+      })
+      try {
+        await write(term, `cycle ${cycle}`)
+        expect(emissions).toBeGreaterThan(0)
+        observer.dispose()
+        const disposedAt = emissions
+        await write(term, ' after dispose')
+        expect(emissions).toBe(disposedAt)
+      } finally {
+        observer.dispose()
         term.dispose()
       }
     }
