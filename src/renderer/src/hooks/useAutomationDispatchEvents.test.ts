@@ -784,22 +784,8 @@ describe('useAutomationDispatchEvents setup launch', () => {
   it.each(['claude', null] as const)(
     'releases ownership on nonzero exit without finalizing the %s tab',
     async (agentId) => {
-      let onExit: ((ptyId: string, code: number) => void) | undefined
-      mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
-        onExit = args.onExit
-        return {
-          tabId: 'agent-tab',
-          paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-          ptyId: 'agent-pty',
-          startupPlan: {},
-          terminalOwnership: {
-            finalize: mockFinalizeTerminalOwnership,
-            release: mockReleaseTerminalOwnership
-          }
-        }
-      })
-
       await registerAndDispatch(makeAutomation({ agentId }))
+      const { onExit } = mockLaunchAgentBackgroundSession.mock.calls[0][0]
       if (agentId === null) {
         expect(mockStoreSubscribe).not.toHaveBeenCalled()
       }

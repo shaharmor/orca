@@ -10,7 +10,7 @@ import {
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
-import { runAutomationPrecheck } from './precheck-runner'
+import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { collectAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
@@ -166,19 +166,7 @@ export class AutomationService {
     }
     const target = this.resolveTarget(automation)
     if (!target.ok) {
-      return {
-        command: automation.precheck.command,
-        exitCode: null,
-        timedOut: false,
-        durationMs: 0,
-        stdout: '',
-        stderr: '',
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        error: target.error,
-        startedAt: Date.now(),
-        completedAt: Date.now()
-      }
+      return failedPrecheckResult(automation.precheck, Date.now(), target.error)
     }
     return await runAutomationPrecheck({
       precheck: automation.precheck,
@@ -193,8 +181,8 @@ export class AutomationService {
     const run = this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
-      if (run.status === 'dispatched' && this.isAgentRun(run)) {
-        this.completionWatcher?.watch(run)
+      if (run.status === 'dispatched' && this.completionWatcher && this.isAgentRun(run)) {
+        this.completionWatcher.watch(run)
       }
       return run
     }
@@ -325,8 +313,8 @@ export class AutomationService {
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),
           watchRun: (dispatched) => {
-            if (this.isAgentRun(dispatched)) {
-              this.completionWatcher?.watch(dispatched)
+            if (this.completionWatcher && this.isAgentRun(dispatched)) {
+              this.completionWatcher.watch(dispatched)
             }
           }
         })
