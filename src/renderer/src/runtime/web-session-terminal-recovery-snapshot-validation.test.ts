@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-session-contracts'
-import { TERMINAL_COLOR_KEYS } from '../../../shared/terminal-custom-themes'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   ENVIRONMENT_ID,
   makeSnapshot,
@@ -93,71 +90,6 @@ async function expectBoundaryVerdict(value: unknown, valid: boolean): Promise<vo
   expect(result).toBe(valid ? value : null)
 }
 
-const status: AgentStatusEntry = {
-  state: 'working',
-  prompt: '',
-  updatedAt: 10,
-  stateStartedAt: 1,
-  paneKey: 'host-tab:leaf-1',
-  stateHistory: [{ state: 'done', prompt: '', startedAt: 0, interrupted: false }],
-  workingMode: 'monitoring',
-  evidenceObservedAt: 9,
-  agentType: 'custom-agent',
-  model: 'model',
-  terminalHandle: 'term-1',
-  worktreeId: WORKTREE,
-  connectionId: null,
-  tabId: 'host-tab',
-  terminalTitle: 'Agent',
-  toolName: 'Read',
-  toolInput: 'file.ts',
-  interactivePrompt: '{}',
-  lastAssistantMessage: 'Working',
-  lastAssistantMessageIsToolOutput: false,
-  lastCompletedAssistantMessage: 'Done',
-  interrupted: false,
-  sessionBoundary: false,
-  terminalResumeEligible: false,
-  promptInteractionKey: 'turn-1',
-  restoredUnconfirmed: false,
-  mirroredEvidenceReceivedAt: 10,
-  acceptedStatusSeq: 0,
-  orchestration: {
-    taskId: 'task-1',
-    dispatchId: 'dispatch-1',
-    dispatchStatus: 'dispatched',
-    taskTitle: 'Task',
-    displayName: 'Worker',
-    parentTerminalHandle: 'term-parent',
-    parentPaneKey: 'parent:leaf',
-    coordinatorHandle: 'term-parent',
-    orchestrationRunId: 'run-1'
-  },
-  subagents: [
-    {
-      id: 'child',
-      agentType: 'custom',
-      model: 'model',
-      description: '',
-      state: 'idle',
-      startedAt: 2
-    }
-  ],
-  providerSession: {
-    key: 'conversation_id',
-    id: 'conversation-1',
-    transcriptPath: '/remote/transcript'
-  },
-  observation: {
-    origin: 'hook',
-    authorityId: 'host',
-    incarnation: 0,
-    revision: 1,
-    observedAt: 9,
-    boundary: true,
-    kind: 'transition'
-  }
-}
 const fullSnapshot: RuntimeMobileSessionTabsResult = {
   ...snapshot(),
   navigationIntent: 'follow',
@@ -188,14 +120,15 @@ const fullSnapshot: RuntimeMobileSessionTabsResult = {
       quickCommandLabel: null,
       ptyId: null,
       incarnationId: null,
-      terminalTheme: {
-        mode: 'dark',
-        theme: Object.fromEntries(TERMINAL_COLOR_KEYS.map((key) => [key, '#ffffff']))
+      agentStatus: {
+        state: 'working',
+        prompt: '',
+        updatedAt: 10,
+        stateStartedAt: 1,
+        paneKey: 'host-tab:leaf-1',
+        stateHistory: []
       },
-      agentStatus: status,
-      turnCompletedAt: 10,
       launchAgent: 'claude',
-      startupCwd: '/remote/folder',
       parentLayout: {
         root: {
           type: 'split',
@@ -207,43 +140,25 @@ const fullSnapshot: RuntimeMobileSessionTabsResult = {
         activeLeafId: 'leaf-1',
         expandedLeafId: null,
         ptyIdsByLeafId: { 'leaf-1': 'pty-1' },
-        buffersByLeafId: { 'leaf-1': 'buffer' },
-        scrollbackRefsByLeafId: { 'leaf-1': 'ref' },
         titlesByLeafId: { 'leaf-1': 'Shell' }
       },
       color: null,
       isPinned: true,
-      viewMode: 'chat',
-      launchDraft: '',
-      launchDraftCreatedAt: 0
+      viewMode: 'chat'
     },
     {
       ...browser,
-      browserProfileId: 'profile',
-      executionHostKey: 'ssh:remote',
       placement: {
         kind: 'client',
         browserHostClientId: 'client',
         browserHostGeneration: 1,
         pageHostGeneration: 2
       },
-      loadError: { code: -1, description: 'Failed', validatedUrl: 'https://example.com' },
-      certificateFailure: {
-        challengeId: 'challenge',
-        browserPageId: 'page-1',
-        errorCode: null,
-        error: 'certificate error',
-        origin: 'https://example.com',
-        displayHost: 'example.com',
-        canProceed: false,
-        observedAt: 10
-      },
-      color: 'blue',
-      isPinned: false
+      loadError: null
     },
-    { ...file, mode: 'diff', diffSource: 'unstaged', color: null, isPinned: false },
-    { ...markdown, mode: 'edit', color: null, isPinned: true },
-    { ...agent, agent: 'codex', color: null, isPinned: false }
+    { ...file, mode: 'diff', diffSource: 'unstaged' },
+    { ...markdown, mode: 'edit' },
+    { ...agent, agent: 'codex' }
   ]
 }
 
@@ -258,15 +173,10 @@ function withField(value: unknown, path: string, replacement: unknown): unknown 
   return copy
 }
 
-// Every populated metadata field must reject a wrong type, including the record/array boundaries.
-function malformedFieldCases(value: unknown, prefix = ''): { path: string; invalid: unknown }[] {
-  if (value === null || typeof value !== 'object') {
-    return []
-  }
-  return Object.entries(value).flatMap(([key, entry]) => {
-    const path = prefix ? `${prefix}.${key}` : key
-    return [{ path, invalid: Array.isArray(entry) ? {} : [] }, ...malformedFieldCases(entry, path)]
-  })
+function readField(value: unknown, path: string): unknown {
+  return path
+    .split('.')
+    .reduce<unknown>((node, key) => (node as Record<string, unknown>)[key], value)
 }
 
 describe('terminal recovery session-tabs snapshot validation', () => {
@@ -290,34 +200,40 @@ describe('terminal recovery session-tabs snapshot validation', () => {
     }
   )
 
-  it.each(rows)('rejects every missing or mistyped required $name field', async ({ row }) => {
-    for (const key of Object.keys(row)) {
-      const missing: Record<string, unknown> = { ...row }
+  // Coordinates and handles are what recovery merges on; nothing else in a row is required.
+  it.each(['id', 'title', 'isActive', 'type', 'parentTabId', 'leafId', 'status', 'terminal'])(
+    'rejects a terminal row missing or mistyping %s',
+    async (key) => {
+      const missing: Record<string, unknown> = { ...ready }
       delete missing[key]
       await expectBoundaryVerdict(snapshot([missing]), false)
-      await expectBoundaryVerdict(snapshot([{ ...row, [key]: {} }]), false)
+      await expectBoundaryVerdict(snapshot([{ ...ready, [key]: {} }]), false)
     }
-  })
+  )
+
+  it.each(['id', 'title', 'isActive', 'type'])(
+    'rejects a non-terminal row missing or mistyping %s',
+    async (key) => {
+      const missing: Record<string, unknown> = { ...browser }
+      delete missing[key]
+      await expectBoundaryVerdict(snapshot([missing]), false)
+      await expectBoundaryVerdict(snapshot([{ ...browser, [key]: {} }]), false)
+    }
+  )
 
   it.each([null, undefined, 1, 'snapshot', [], {}, Object.assign([], snapshot())])(
     'rejects non-snapshot records: %j',
     async (value) => expectBoundaryVerdict(value, false)
   )
 
-  it.each([
-    null,
-    undefined,
-    1,
-    'tab',
-    [],
-    {},
-    Object.assign([], ready),
-    { ...ready, type: 'future-tab' }
-  ])('rejects malformed rows without salvaging other rows: %j', async (row) => {
-    const value = snapshot([ready, row, browser])
-    await expectBoundaryVerdict(value, false)
-    expect(value.tabs).toEqual([ready, row, browser])
-  })
+  it.each([null, undefined, 1, 'tab', [], {}, Object.assign([], ready)])(
+    'rejects malformed rows without salvaging other rows: %j',
+    async (row) => {
+      const value = snapshot([ready, row, browser])
+      await expectBoundaryVerdict(value, false)
+      expect(value.tabs).toEqual([ready, row, browser])
+    }
+  )
 
   it.each([
     { ...pending, terminal: 'term-1' },
@@ -325,12 +241,8 @@ describe('terminal recovery session-tabs snapshot validation', () => {
     { ...ready, terminal: null },
     { ...ready, terminal: '' },
     { ...ready, terminal: '  ' },
-    { ...markdown, language: 'typescript' },
-    { ...markdown, mode: 'diff' },
-    { ...file, mode: 'markdown-preview' },
-    { ...file, diffSource: 'unknown' },
-    { ...agent, agent: 'unknown' }
-  ])('rejects invalid row discriminants and handles: %j', async (row) => {
+    { ...ready, status: 'exited' }
+  ])('rejects terminal rows whose handle and status disagree: %j', async (row) => {
     await expectBoundaryVerdict(snapshot([row]), false)
   })
 
@@ -361,78 +273,50 @@ describe('terminal recovery session-tabs snapshot validation', () => {
     expect(fullSnapshot).toEqual(original)
   })
 
-  it.each(malformedFieldCases(fullSnapshot))(
-    'rejects malformed consumed metadata at $path',
-    ({ path, invalid }) => {
-      expect(isTerminalRecoverySnapshot(withField(fullSnapshot, path, invalid))).toBe(false)
-    }
-  )
-
   it.each([
+    'tabGroups',
     'tabGroups.0',
     'tabGroupLayout',
     'tabGroupLayout.first',
+    'retiredTerminalSurfaces',
     'retiredTerminalSurfaces.0',
+    'tabs',
+    'tabs.0',
     'tabs.0.parentLayout',
     'tabs.0.parentLayout.root',
-    'tabs.0.parentLayout.ptyIdsByLeafId',
-    'tabs.0.parentLayout.buffersByLeafId',
-    'tabs.0.parentLayout.scrollbackRefsByLeafId',
-    'tabs.0.parentLayout.titlesByLeafId',
-    'tabs.0.terminalTheme',
-    'tabs.0.terminalTheme.theme',
-    'tabs.0.agentStatus',
-    'tabs.0.agentStatus.stateHistory.0',
-    'tabs.0.agentStatus.orchestration',
-    'tabs.0.agentStatus.subagents.0',
-    'tabs.0.agentStatus.providerSession',
-    'tabs.0.agentStatus.observation',
-    'tabs.1.placement',
-    'tabs.1.loadError',
-    'tabs.1.certificateFailure'
-  ])('rejects arrays masquerading as nested records at %s', (path) => {
-    expect(isTerminalRecoverySnapshot(withField(fullSnapshot, path, []))).toBe(false)
+    'tabs.0.parentLayout.ptyIdsByLeafId'
+  ])('rejects the wrong container kind for consumed structure at %s', (path) => {
+    const wrongKind = Array.isArray(readField(fullSnapshot, path)) ? {} : []
+    expect(isTerminalRecoverySnapshot(withField(fullSnapshot, path, wrongKind))).toBe(false)
   })
 
   it.each([
     ['tabGroups', [{}]],
+    ['tabGroups.0.id', ''],
     ['tabGroups.0.activeTabId', undefined],
     ['tabGroups.0.tabOrder', [null]],
     ['tabGroups.0.recentTabIds', [false]],
     ['tabGroupLayout.type', 'unknown'],
-    ['tabGroupLayout.direction', 'diagonal'],
     ['tabGroupLayout.first', null],
     ['tabGroupLayout.second', { type: 'leaf' }],
-    ['tabGroupLayout.ratio', 2],
     ['retiredTerminalSurfaces', [{}]],
     ['retiredTerminalSurfaces.0.ptyId', undefined],
     ['retiredTerminalSurfaces.0.terminal', ''],
+    ['retiredTerminalSurfaces.0.leafId', ' '],
     ['retiredTerminalSurfaces.0.incarnationId', null],
+    ['tabs.0.parentLayout', {}],
+    ['tabs.0.parentLayout.root', { type: 'split' }],
     ['tabs.0.parentLayout.root.second', {}],
-    ['tabs.0.parentLayout.root.direction', 'diagonal'],
-    ['tabs.0.parentLayout.root.ratio', Number.NaN],
+    ['tabs.0.parentLayout.root.first.leafId', ''],
     ['tabs.0.parentLayout.activeLeafId', undefined],
     ['tabs.0.parentLayout.expandedLeafId', undefined],
     ['tabs.0.parentLayout.ptyIdsByLeafId', { leaf: null }],
-    ['tabs.0.agentStatus', {}],
-    ['tabs.0.agentStatus.state', 'unknown'],
-    ['tabs.0.agentStatus.stateHistory', [{}]],
-    ['tabs.0.agentStatus.subagents', [{}]],
-    ['tabs.0.agentStatus.orchestration', {}],
-    ['tabs.0.agentStatus.providerSession', {}],
-    ['tabs.0.agentStatus.observation', {}],
-    ['tabs.0.terminalTheme', {}],
-    ['tabs.0.terminalTheme.mode', 'unknown'],
-    ['tabs.0.launchAgent', 'unknown'],
-    ['tabs.0.viewMode', 'unknown'],
-    ['tabs.1.placement', { kind: 'client' }],
-    ['tabs.1.placement.kind', 'unknown'],
-    ['tabs.1.loadError', {}],
-    ['tabs.1.certificateFailure', {}],
-    ['navigationIntent', 'unknown'],
-    ['activeTabType', 'editor'],
-    ['clientHostedPagesUnreconciled', false]
-  ] as const)('rejects incomplete/invalid structural metadata at %s (%j)', async (path, value) => {
+    ['tabs.0.ptyId', 1],
+    ['tabs.0.incarnationId', false],
+    ['activeTabType', 1],
+    ['activeTabId', undefined],
+    ['activeGroupId', undefined]
+  ] as const)('rejects incomplete/invalid consumed structure at %s (%j)', async (path, value) => {
     await expectBoundaryVerdict(withField(fullSnapshot, path, value), false)
   })
 
@@ -445,13 +329,7 @@ describe('terminal recovery session-tabs snapshot validation', () => {
         agentStatus: null,
         parentLayout: { root: null, activeLeafId: null, expandedLeafId: null }
       },
-      {
-        ...browser,
-        browserPageId: null,
-        placement: { kind: 'server' },
-        loadError: null,
-        certificateFailure: null
-      },
+      { ...browser, browserPageId: null, placement: { kind: 'server' }, loadError: null },
       { ...file, mode: 'edit', diffSource: 'staged' }
     ])
     await expectBoundaryVerdict({ ...value, tabGroupLayout: null, tabGroups: undefined }, true)
@@ -462,12 +340,40 @@ describe('terminal recovery session-tabs snapshot validation', () => {
     expect(legacy.tabs[2]).not.toHaveProperty('placement')
   })
 
-  it.each(Object.keys(TUI_AGENT_CONFIG))(
-    'accepts the existing launch-agent domain: %s',
-    async (launchAgent) => {
-      await expectBoundaryVerdict(snapshot([{ ...ready, launchAgent }]), true)
-    }
-  )
+  // Wire-compat Rule 3: a newer host may publish labels this client has never seen. Rejecting the
+  // whole snapshot would stall recovery forever; recovery reads none of these, so they pass through.
+  it.each([
+    ['tabs.4.agent', 'gemini'],
+    ['tabs.0.agentStatus.state', 'future-state'],
+    ['tabs.0.agentStatus', { state: 'working' }],
+    ['tabs.0.viewMode', 'future-view'],
+    ['tabs.0.launchAgent', 'future-agent'],
+    ['tabs.0.terminalTheme', { mode: 'sepia' }],
+    ['tabs.0.parentLayout.root.direction', 'diagonal'],
+    ['tabs.0.parentLayout.root.ratio', 2],
+    ['tabs.0.parentLayout.titlesByLeafId', { 'leaf-1': 1 }],
+    ['tabs.1.placement', { kind: 'future-host' }],
+    ['tabs.1.loadError', { code: 'string' }],
+    ['tabs.2.mode', 'future-mode'],
+    ['tabs.2.diffSource', 'future-source'],
+    ['tabs.3.language', 'future-language'],
+    ['tabGroupLayout.direction', 'diagonal'],
+    ['tabGroupLayout.ratio', 2],
+    ['navigationIntent', 'future-intent'],
+    ['activeTabType', 'future-tab'],
+    ['clientHostedPagesUnreconciled', false]
+  ] as const)('accepts a newer host publishing %s = %j', async (path, value) => {
+    const newer = withField(fullSnapshot, path, value)
+    await expectBoundaryVerdict(newer, true)
+    expect(newer).toEqual(withField(fullSnapshot, path, value))
+  })
+
+  it('accepts a newer host publishing a tab kind this client cannot render', async () => {
+    const notebook = { type: 'notebook', id: 'nb-1', title: 'Notebook', isActive: false, cells: [] }
+    const value = snapshot([ready, notebook, browser])
+    await expectBoundaryVerdict(value, true)
+    expect(value.tabs[1]).toBe(notebook)
+  })
 
   it('preserves unknown additive fields at every snapshot depth', async () => {
     const additive = { future: { nested: [null, false, {}] } }
@@ -491,14 +397,15 @@ describe('terminal recovery session-tabs snapshot validation', () => {
     expect(value).toEqual(original)
   })
 
-  it('fails closed on cyclic layouts instead of throwing', () => {
-    const layout: Record<string, unknown> = {
-      type: 'split',
-      direction: 'horizontal',
-      first: { type: 'leaf', groupId: 'group-1' }
-    }
-    layout.second = layout
-    expect(isTerminalRecoverySnapshot({ ...snapshot(), tabGroupLayout: layout })).toBe(false)
+  it('fails closed when reading the payload throws instead of propagating', () => {
+    const hostile = snapshot([ready]) as Record<string, unknown>
+    Object.defineProperty(hostile, 'tabGroups', {
+      enumerable: true,
+      get() {
+        throw new Error('poisoned accessor')
+      }
+    })
+    expect(isTerminalRecoverySnapshot(hostile)).toBe(false)
   })
 
   it('rejects arrays used as adoption or RPC envelopes', () => {
