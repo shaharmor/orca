@@ -47,6 +47,8 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
     accumDelta: 0, momentumId: null, isPinching: false,
     pinchDist: 0, pinchScale: 0, pinchSurfX: 0, pinchSurfY: 0
   };
+  var EDGE_BACK_START_X = 24;
+  var EDGE_BACK_SLOP = 8;
 
   function updateTouchVelocity(deltaY, dt) {
     if (dt <= 0) return;
@@ -94,7 +96,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         ts.isPinching = false;
         ts.startX = ts.lastX = e.touches[0].clientX;
         ts.startY = ts.lastY = e.touches[0].clientY;
-        ts.backSwipe = isIOSWebView() && ts.startX <= 24 ? 'pending' : null;
+        ts.backSwipe = isIOSWebView() && ts.startX <= EDGE_BACK_START_X ? 'pending' : null;
         ts.lastTime = Date.now();
         ts.velY = 0;
         ts.accumDelta = 0;
@@ -111,7 +113,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         if (ts.backSwipe === 'pending') {
           var dx = e.touches[0].clientX - ts.startX;
           var dy = e.touches[0].clientY - ts.startY;
-          if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+          if (Math.max(Math.abs(dx), Math.abs(dy)) < EDGE_BACK_SLOP) return;
           ts.backSwipe = dx > Math.abs(dy) ? 'active' : null;
           if (ts.backSwipe === 'active') {
             clearLongPress();
