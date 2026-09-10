@@ -296,6 +296,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               ref={liveInputRef}
               style={styles.liveInputCapture}
               value={liveInputCapture}
+              // Why: recalled/pasted terminal text can outlive the native field's text.
+              allowEmptyBackspaceRepeat={Platform.OS === 'ios'}
               onChange={handleLiveInputChange}
               onKeyPress={handleLiveInputKeyPress}
               onSubmitEditing={() => {
