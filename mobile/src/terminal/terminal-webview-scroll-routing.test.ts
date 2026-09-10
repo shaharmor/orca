@@ -36,7 +36,7 @@ describe('TerminalWebView scroll routing', () => {
   })
 
   it('yields an iOS left-edge back swipe without panning, scrolling, tapping, or momentum', () => {
-    const { touch, context, descendantTouchMove } = createTerminalTouchHarness()
+    const { touch, context, descendantTouchMove, descendantTouchEnd } = createTerminalTouchHarness()
     context.shouldRouteScrollToTerminalInput = () => true
     touch('touchstart', [[4, 200]])
     const move = touch('touchmove', [[84, 204]])
@@ -47,7 +47,11 @@ describe('TerminalWebView scroll routing', () => {
     expect(context.tapCandidate).toBeNull()
     expect(context.longPressTimer).toBeNull()
     expect(touch('touchmove', [[2, 200]]).preventDefault).not.toHaveBeenCalled()
-    touch('touchend', [])
+    const end = touch('touchend', [])
+    expect(end.defaultPrevented).toBe(false)
+    expect(end.preventDefault).not.toHaveBeenCalled()
+    expect(descendantTouchEnd).not.toHaveBeenCalled()
+    expect(end.stopPropagation).toHaveBeenCalled()
     vi.advanceTimersByTime(600)
     expect(context.notifyTerminalSurfaceTap).not.toHaveBeenCalled()
     expect(context.enterSelect).not.toHaveBeenCalled()
@@ -70,10 +74,12 @@ describe('TerminalWebView scroll routing', () => {
     ['iOS edge scroll', true, 4, 6, 280],
     ['iOS leftward pan', true, 20, 2, 204]
   ] as const)('preserves terminal handling for %s', (_name, ios, startX, endX, endY) => {
-    const { touch, context } = createTerminalTouchHarness(ios)
+    const { touch, context, descendantTouchEnd } = createTerminalTouchHarness(ios)
     touch('touchstart', [[startX, 200]])
     expect(touch('touchmove', [[endX, endY]]).preventDefault).toHaveBeenCalled()
     expect(context.enqueueNormalBufferScrollDelta).toHaveBeenCalled()
+    touch('touchend', [])
+    expect(descendantTouchEnd).toHaveBeenCalledOnce()
   })
 
   it('keeps an edge-origin vertical scroll in the terminal after a horizontal turn', () => {

@@ -183,7 +183,11 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
 
     targetSurface.addEventListener('touchend', function(e) {
       if (dispatcherShouldBlockSurface()) return;
-      if (!term || ts.backSwipe === 'active') return;
+      if (!term) return;
+      if (ts.backSwipe === 'active') {
+        e.stopPropagation();
+        return;
+      }
 
       if (ts.isPinching && e.touches.length < 2) {
         ts.isPinching = false;

@@ -113,6 +113,7 @@ export function createTerminalTouchHarness(ios = true) {
       source.slice(start, source.lastIndexOf('`'))
   ).runInNewContext(context)
   const descendantTouchMove = vi.fn((event: TouchEvent) => event.preventDefault())
+  const descendantTouchEnd = vi.fn()
 
   function touch(type: string, points: Array<[number, number]>, target = cell) {
     let stopped = false
@@ -141,9 +142,13 @@ export function createTerminalTouchHarness(ios = true) {
     for (const ancestor of ancestors) {
       dispatchListener(ancestor.listeners.get(type), true)
     }
-    if (!stopped && type === 'touchmove' && target === cell) {
+    if (!stopped && target === cell) {
       passive = false
-      descendantTouchMove(event)
+      if (type === 'touchmove') {
+        descendantTouchMove(event)
+      } else if (type === 'touchend') {
+        descendantTouchEnd(event)
+      }
     }
     for (const ancestor of ancestors.toReversed()) {
       dispatchListener(ancestor.listeners.get(type), false)
@@ -151,5 +156,5 @@ export function createTerminalTouchHarness(ios = true) {
     return { ...event, defaultPrevented }
   }
 
-  return { touch, context, descendantTouchMove, handleStart }
+  return { touch, context, descendantTouchMove, descendantTouchEnd, handleStart }
 }
