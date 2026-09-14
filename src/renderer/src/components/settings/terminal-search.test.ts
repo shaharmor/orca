@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
 import { getAppearancePaneSearchEntries, getSidebarEntries } from './appearance-search'
-import { getWorkspaceCardLayoutEntry } from './appearance-sidebar-search'
+import {
+  getShowPinnedWorktreesInGroupsEntry,
+  getWorkspaceCardLayoutEntry
+} from './appearance-sidebar-search'
 import { matchesSettingsSearch } from './settings-search'
 
 describe('getTerminalPaneSearchEntries', () => {
@@ -153,14 +156,17 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
   })
 
-  it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
-    const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
-    const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
+  it.each(['ghostty', 'warp', 'yaml'])(
+    'omits desktop-only %s search results on web clients',
+    (query) => {
+      const desktopEntries = getAppearancePaneSearchEntries()
+      const webEntries = getAppearancePaneSearchEntries({ showDesktopThemeImports: false })
 
-    expect(desktopEntries.some((entry) => entry.title === 'Import from Warp')).toBe(true)
-    expect(webEntries.some((entry) => entry.title === 'Import from Warp')).toBe(false)
-    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
-  })
+      expect(matchesSettingsSearch(query, desktopEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, webEntries)).toBe(false)
+      expect(matchesSettingsSearch('font size', webEntries)).toBe(true)
+    }
+  )
 
   it('includes the system tray appearance entry only when desktop tray controls are shown', () => {
     const desktopEntries = getAppearancePaneSearchEntries({ showSystemTray: true })
@@ -170,6 +176,15 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(webEntries.some((entry) => entry.title === 'Minimize to Tray on Close')).toBe(false)
     expect(matchesSettingsSearch('tray', desktopEntries)).toBe(true)
     expect(matchesSettingsSearch('tray', webEntries)).toBe(false)
+  })
+
+  it('includes the macOS menu bar entry only when its desktop control is shown', () => {
+    const macEntries = getAppearancePaneSearchEntries({ showMenuBarIcon: true })
+    const otherEntries = getAppearancePaneSearchEntries({ showMenuBarIcon: false })
+
+    expect(macEntries.some((entry) => entry.title === 'Show Menu Bar Icon')).toBe(true)
+    expect(otherEntries.some((entry) => entry.title === 'Show Menu Bar Icon')).toBe(false)
+    expect(matchesSettingsSearch('status item', macEntries)).toBe(true)
   })
 
   it('keeps sidebar shortcut restore settings in the Appearance search index', () => {
@@ -204,5 +219,28 @@ describe('getTerminalPaneSearchEntries', () => {
 
   it('matches the Appearance catalog for compact workspace card searches', () => {
     expect(matchesSettingsSearch('compact', getAppearancePaneSearchEntries())).toBe(true)
+  })
+
+  // The notice tells users to "turn it off in Terminal settings", so the product names in
+  // the copy have to be the ones that find it.
+  it.each(['zellij', 'grok', 'tmux', 'osc 52'])(
+    'finds the OSC 52 clipboard setting by searching %s',
+    (query) => {
+      const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+      const osc52 = entries.filter((entry) =>
+        entry.title.includes('Allow TUI Clipboard Writes (OSC 52)')
+      )
+
+      expect(osc52).toHaveLength(1)
+      expect(matchesSettingsSearch(query, osc52)).toBe(true)
+    }
+  )
+
+  it('includes pinned worktree duplicate display in sidebar and Appearance search', () => {
+    const entry = getShowPinnedWorktreesInGroupsEntry()
+
+    expect(getSidebarEntries()).toContainEqual(entry)
+    expect(getAppearancePaneSearchEntries()).toContainEqual(entry)
+    expect(matchesSettingsSearch('duplicate', entry)).toBe(true)
   })
 })

@@ -15,9 +15,17 @@ type TerminalSearchProps = {
   inputRef?: React.RefObject<HTMLInputElement | null>
 }
 
-// Why: mirrors xterm SearchAddon.onDidChangeResults payload; resultIndex is -1
-// when the match count exceeds the addon highlight limit (default 1000).
+// xterm uses index -1 when results exceed its highlight limit.
 const EMPTY_RESULTS = { resultIndex: -1, resultCount: 0 }
+
+function clearTerminalSearch(searchAddon: SearchAddon | null): void {
+  if (!searchAddon) {
+    return
+  }
+  searchAddon.clearDecorations()
+  // Why: xterm keeps the active match selected after decorations are cleared.
+  searchAddon.findNext('')
+}
 
 export default function TerminalSearch({
   isOpen,
@@ -87,10 +95,7 @@ export default function TerminalSearch({
     [inputRef]
   )
 
-  // Why: the SearchAddon emits result index/count only when decorations are
-  // enabled (they are here). All match navigation — panel buttons, Enter, and
-  // Cmd+G in keyboard-handlers — routes through this addon, so one subscription
-  // keeps the indicator in sync everywhere.
+  // One addon subscription tracks both panel and keyboard navigation.
   useEffect(() => {
     if (!searchAddon) {
       return
@@ -99,18 +104,20 @@ export default function TerminalSearch({
     return () => disposable.dispose()
   }, [searchAddon])
 
+  useEffect(
+    () => () => {
+      clearTerminalSearch(searchAddon)
+    },
+    [searchAddon]
+  )
+
   useEffect(() => {
     // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
     // can read the current search state without lifting it to parent state.
     searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex }
 
-    if (!isOpen) {
-      searchAddon?.clearDecorations()
-      setResults(EMPTY_RESULTS)
-      return
-    }
-    if (!requestQuery) {
-      searchAddon?.clearDecorations()
+    if (!isOpen || !requestQuery) {
+      clearTerminalSearch(searchAddon)
       setResults(EMPTY_RESULTS)
       return
     }

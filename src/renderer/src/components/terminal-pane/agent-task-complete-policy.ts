@@ -3,13 +3,12 @@
  *
  * Why extracted from pty-connection.ts: the parked byte watcher and the
  * pty:sideEffect facts handler apply the exact live-path semantics without a
- * pane, and policy must not drift between the three consumers
- * (docs/reference/terminal-side-effect-authority.md). This module is
+ * pane, and policy must not drift between the three consumers. This module is
  * deliberately dependency-light — no pane/xterm imports — so pane-less
  * consumers can use it.
  */
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 /** Delay before BEL/completion OS notifications so the richer
  *  agent-task-complete notification can win a same-burst BEL race. */
@@ -33,15 +32,12 @@ export function isTerminalAttentionEnabledFromState(state: NotificationSettingsS
   return state.settings?.experimentalTerminalAttention === true
 }
 
-/** Completion tracking runs when either consumer (OS notification or the
- *  experimental terminal-attention marker) is enabled. */
-export function isAgentTaskCompleteTrackingEnabledFromState(
-  state: NotificationSettingsState
-): boolean {
-  return (
-    isAgentTaskCompleteOsNotificationEnabledFromState(state) ||
-    isTerminalAttentionEnabledFromState(state)
-  )
+/** Track completions once settings hydrate; each delivery surface applies its own filter. */
+export function isAgentTaskCompleteTrackingEnabledFromState(state: {
+  settings: object | null
+}): boolean {
+  // Mobile delivery can remain enabled when desktop banners and attention are off.
+  return state.settings !== null
 }
 
 export function hasAgentNotificationDetail(entry: AgentStatusEntry | undefined): boolean {
