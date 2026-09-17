@@ -3,9 +3,9 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 import {
   execInTerminal,
   focusActiveTerminalInput,
+  getTerminalContent,
   waitForActivePanePtyId,
-  waitForActiveTerminalManager,
-  waitForTerminalOutput
+  waitForActiveTerminalManager
 } from './helpers/terminal'
 
 test('terminal search counts real matches and repeat find selects the query', async ({
@@ -16,19 +16,26 @@ test('terminal search counts real matches and repeat find selects the query', as
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
   const ptyId = await waitForActivePanePtyId(orcaPage)
-  await execInTerminal(
-    orcaPage,
-    ptyId,
-    'printf "orca-%s\\n" search-proof search-proof search-proof'
-  )
-  await waitForTerminalOutput(orcaPage, 'orca-search-proof')
+  for (let line = 0; line < 3; line++) {
+    await execInTerminal(orcaPage, ptyId, 'echo orca-search-proof')
+  }
+  await expect
+    .poll(
+      async () =>
+        (await getTerminalContent(orcaPage))
+          .split(/\r?\n/)
+          .filter((line) => line.trim() === 'orca-search-proof').length
+    )
+    .toBe(3)
   await focusActiveTerminalInput(orcaPage)
   const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
   await orcaPage.keyboard.press(`${modifier}+f`)
   const search = orcaPage.locator('[data-terminal-search-root]')
   const input = search.locator('input')
   await expect(input).toBeFocused()
-  await input.fill('orca-search-proof')
+  await search.getByTitle('Regex', { exact: true }).click()
+  const query = '^orca-search-proof$'
+  await input.fill(query)
   await expect(search).toContainText(/[1-3]\/3/)
   const initialCount = await search.innerText()
   await input.press('Enter')
@@ -41,7 +48,7 @@ test('terminal search counts real matches and repeat find selects the query', as
     .poll(() =>
       input.evaluate((element) => ({ start: element.selectionStart, end: element.selectionEnd }))
     )
-    .toEqual({ start: 0, end: 'orca-search-proof'.length })
+    .toEqual({ start: 0, end: query.length })
   await orcaPage.screenshot({ path: testInfo.outputPath('search-query-selected.png') })
   await input.fill('no-such-search-result-314159')
   await expect(search).toContainText('No results')
