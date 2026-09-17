@@ -8,8 +8,7 @@ type Props = {
   keys: AccessoryKeyDescriptor[]
   // Bar-wide disabled state; a descriptor's own `disabled` overrides it (nullish).
   disabled?: boolean
-  // Fixed slot rendered before the scrollable keys and never scrolled away
-  // (the terminal keyboard-dismiss key lives here, per issue #5106).
+  // Keeps keyboard dismissal visible when the keys scroll.
   leading?: React.ReactNode
 }
 
@@ -21,8 +20,7 @@ export function MobileAccessoryKeyBar({
   return (
     <View style={styles.accessoryBar}>
       {leading}
-      {/* Why: keyboardShouldPersistTaps keeps the open keyboard alive on the first
-      accessory tap instead of swallowing it to dismiss the keyboard (#5106). */}
+      {/* Keep the first accessory tap from dismissing the keyboard (#5106). */}
       <ScrollView
         style={styles.accessoryScroll}
         horizontal
@@ -39,12 +37,11 @@ export function MobileAccessoryKeyBar({
                 styles.accessoryKey,
                 key.bordered && styles.customAccessoryKey,
                 key.active && styles.accessoryKeyActive,
-                pressed && styles.accessoryKeyPressed,
+                pressed && !key.active && styles.accessoryKeyPressed,
                 isDisabled && styles.accessoryKeyDisabled
               ]}
               disabled={isDisabled}
               accessibilityRole="button"
-              // Why: announce sticky modifier state so assistive tech reads active keys as selected.
               accessibilityState={{ disabled: isDisabled, selected: key.active }}
               onPress={key.onPress}
               onPressIn={key.onPressIn}

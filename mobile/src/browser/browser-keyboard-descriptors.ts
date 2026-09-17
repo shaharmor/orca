@@ -17,17 +17,12 @@ function specialKeyLabel(key: string): string {
 
 type BuildArgs = {
   selectedModifiers: BrowserPointerModifier[]
-  disabled: boolean
   onToggleModifier: (modifier: BrowserPointerModifier) => void
   onKeypress: (key: string) => void
 }
 
-// Why: the browser bar has no PTY, so its buttons are just sticky pointer
-// modifiers plus momentary special keys — built here as a pure list so the
-// mapping is unit-testable (the mobile package has no component-render tests).
 export function buildBrowserKeyboardDescriptors({
   selectedModifiers,
-  disabled,
   onToggleModifier,
   onKeypress
 }: BuildArgs): AccessoryKeyDescriptor[] {
@@ -36,7 +31,6 @@ export function buildBrowserKeyboardDescriptors({
       id: `modifier-${modifier.id}`,
       label: modifier.label,
       active: selectedModifiers.includes(modifier.id),
-      disabled,
       onPress: () => onToggleModifier(modifier.id),
       accessibilityLabel: `${modifier.label} click modifier`
     })
@@ -44,7 +38,6 @@ export function buildBrowserKeyboardDescriptors({
   const keyDescriptors: AccessoryKeyDescriptor[] = BROWSER_KEYS.map((key) => ({
     id: `key-${key}`,
     label: specialKeyLabel(key),
-    disabled,
     onPress: () => onKeypress(key),
     accessibilityLabel: key
   }))

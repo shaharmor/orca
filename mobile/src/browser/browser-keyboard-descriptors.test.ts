@@ -7,13 +7,11 @@ import {
 
 function build(overrides: {
   selectedModifiers?: BrowserPointerModifier[]
-  disabled?: boolean
   onToggleModifier?: (modifier: BrowserPointerModifier) => void
   onKeypress?: (key: string) => void
 }) {
   return buildBrowserKeyboardDescriptors({
     selectedModifiers: overrides.selectedModifiers ?? [],
-    disabled: overrides.disabled ?? false,
     onToggleModifier: overrides.onToggleModifier ?? (() => {}),
     onKeypress: overrides.onKeypress ?? (() => {})
   })
@@ -59,10 +57,5 @@ describe('buildBrowserKeyboardDescriptors', () => {
     expect(descriptors.find((key) => key.id === 'key-Backspace')?.label).toBe('⌫')
     expect(descriptors.find((key) => key.id === 'key-Escape')?.label).toBe('Esc')
     expect(descriptors.find((key) => key.id === 'key-Enter')?.label).toBe('Enter')
-  })
-
-  it('propagates disabled to every descriptor', () => {
-    const descriptors = build({ disabled: true })
-    expect(descriptors.every((key) => key.disabled === true)).toBe(true)
   })
 })

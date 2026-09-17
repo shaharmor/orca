@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   OpenCodeUsageDailyAggregate,
@@ -15,7 +18,21 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { OpenCodeUsageStore, normalizePersistedState } from './store'
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanOpenCodeUsageDatabasesViaWorker: vi.fn()
+}))
+
+import { OpenCodeUsageStore, initOpenCodeUsagePath } from './store'
+import { normalizePersistedState } from './persisted-state-normalization'
+import { scanOpenCodeUsageDatabasesViaWorker } from '../usage/usage-scan-worker-spawn'
+
+function createEmptyScanResult() {
+  return {
+    processedDatabases: [],
+    sessions: [],
+    dailyAggregates: []
+  }
+}
 
 function getDefaultState(): OpenCodeUsagePersistedState {
   return {
@@ -36,8 +53,8 @@ function getDefaultState(): OpenCodeUsagePersistedState {
 function createStoreWithState(state: Partial<OpenCodeUsagePersistedState>): OpenCodeUsageStore {
   const store = new OpenCodeUsageStore({
     getRepos: () => [],
-    getWorktreeMeta: () => undefined
-  } as never)
+    getAllWorktreeMeta: () => ({})
+  })
 
   ;(store as unknown as { state: OpenCodeUsagePersistedState }).state = {
     ...getDefaultState(),
@@ -140,13 +157,38 @@ function makeDaily(
 }
 
 describe('OpenCodeUsageStore', () => {
+  let tempUserData: string
+
   beforeEach(() => {
+    tempUserData = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-store-'))
+    getPathMock.mockReturnValue(tempUserData)
+    initOpenCodeUsagePath()
+    vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockReset()
+    vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-10T12:00:00.000-04:00'))
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    rmSync(tempUserData, { recursive: true, force: true })
+  })
+
+  it('adapts OpenCode scans to pretty-printed cache persistence', async () => {
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+
+    await store.refresh(true)
+
+    const persistedJson = readFileSync(join(tempUserData, 'orca-opencode-usage.json'), 'utf-8')
+    expect(scanOpenCodeUsageDatabasesViaWorker).toHaveBeenCalledWith([], [])
+    expect(persistedJson).toContain('\n')
   })
 
   it('reports no data for Orca scope when only non-Orca OpenCode usage exists', async () => {

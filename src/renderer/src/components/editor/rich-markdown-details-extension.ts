@@ -22,7 +22,8 @@ const TOGGLE_HEADING_PLACEHOLDERS: Record<ToggleHeadingVariant, readonly [string
   'heading-1': ['auto.components.editor.rich.markdown.slash.commands.e66e7f04c6', 'Heading 1'],
   'heading-2': ['auto.components.editor.rich.markdown.slash.commands.c209a116b7', 'Heading 2'],
   'heading-3': ['auto.components.editor.rich.markdown.slash.commands.30566ee962', 'Heading 3'],
-  'heading-4': ['auto.components.editor.rich.markdown.slash.commands.5f9a0ed7c4', 'Heading 4']
+  'heading-4': ['auto.components.editor.rich.markdown.slash.commands.5f9a0ed7c4', 'Heading 4'],
+  'heading-5': ['auto.components.editor.rich.markdown.slash.commands.8440fa4acf', 'Heading 5']
 }
 
 function toggleHeadingPlaceholder(variant: ToggleHeadingVariant): string {
@@ -285,6 +286,13 @@ const OrcaDetails = Details.extend({
   }
 })
 
+const OrcaDetailsSummary = DetailsSummary.extend({
+  // Why: the summary parser runs parseInline, which emits image/math nodes that
+  // upstream's text*-only summary rejects, so the doc is schema-invalid until the
+  // first edit reassembles the summary and ProseMirror throws.
+  content: 'inline*'
+})
+
 const OrcaDetailsContent = DetailsContent.extend({
   // Why: detailsContent's double-Enter escape must run before StarterKit's
   // generic paragraph split, otherwise users can get stuck inside a toggle.
@@ -313,7 +321,7 @@ export function createOrcaDetailsExtensions(): AnyExtension[] {
         class: 'orca-details'
       }
     }),
-    DetailsSummary,
+    OrcaDetailsSummary,
     OrcaDetailsContent
   ]
 }

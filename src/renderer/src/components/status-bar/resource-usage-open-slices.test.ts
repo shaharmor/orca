@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   getResourceUsageAllWorktrees,
+  getResourceUsageDeferredSshSessionIdsByTabId,
+  getResourceUsageFolderWorkspaces,
+  getResourceUsageProjectGroups,
   getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
@@ -41,6 +44,19 @@ const worktree = (): AppState['worktreesByRepo'][string][number] => ({
 })
 
 describe('resource usage open slices', () => {
+  it('subscribes to folder and group catalogs only while open', () => {
+    const folderWorkspaces: AppState['folderWorkspaces'] = []
+    const projectGroups: AppState['projectGroups'] = []
+    expect(getResourceUsageFolderWorkspaces({ folderWorkspaces }, true)).toBe(folderWorkspaces)
+    expect(getResourceUsageProjectGroups({ projectGroups }, true)).toBe(projectGroups)
+    expect(getResourceUsageFolderWorkspaces({ folderWorkspaces }, false)).toBe(
+      getResourceUsageFolderWorkspaces({ folderWorkspaces: [] }, false)
+    )
+    expect(getResourceUsageProjectGroups({ projectGroups }, false)).toBe(
+      getResourceUsageProjectGroups({ projectGroups: [] }, false)
+    )
+  })
+
   it('returns stable empty slices while the popover is closed', () => {
     const tabsByWorktree = { 'wt-1': [terminalTab('tab-1')] }
     const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
@@ -71,10 +87,20 @@ describe('resource usage open slices', () => {
     expect(closedLayouts).toBe(
       getResourceUsageTerminalLayoutsByTabId({ terminalLayoutsByTabId: {} }, false)
     )
+    const deferredSshSessionIdsByTabId = { 'tab-1': 'pty-deferred' }
+    const closedDeferred = getResourceUsageDeferredSshSessionIdsByTabId(
+      { deferredSshSessionIdsByTabId },
+      false
+    )
+    expect(closedDeferred).toBe(
+      getResourceUsageDeferredSshSessionIdsByTabId({ deferredSshSessionIdsByTabId: {} }, false)
+    )
+
     expect(closedTabs).toEqual({})
     expect(closedPtyIds).toEqual({})
     expect(closedLayouts).toEqual({})
     expect(closedTitles).toEqual({})
+    expect(closedDeferred).toEqual({})
   })
 
   it('returns live slices while the popover is open', () => {
@@ -99,10 +125,23 @@ describe('resource usage open slices', () => {
     expect(getResourceUsageRuntimePaneTitlesByTabId({ runtimePaneTitlesByTabId }, true)).toBe(
       runtimePaneTitlesByTabId
     )
+    const deferredSshSessionIdsByTabId = { 'tab-1': 'pty-deferred' }
+    expect(
+      getResourceUsageDeferredSshSessionIdsByTabId({ deferredSshSessionIdsByTabId }, true)
+    ).toBe(deferredSshSessionIdsByTabId)
   })
 
   it('gates repo and worktree slices only while closed', () => {
-    const repos = [{ id: 'repo-1', path: '/repo', kind: 'git' }] as AppState['repos']
+    const repos = [
+      {
+        id: 'repo-1',
+        path: '/repo',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git'
+      }
+    ] as AppState['repos']
     const row = worktree()
     const worktreesByRepo = {
       'repo-1': [row]

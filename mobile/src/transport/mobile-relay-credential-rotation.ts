@@ -10,6 +10,10 @@ import {
   type MobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 import type { RpcClient } from './rpc-client'
 
 const CREDENTIAL_ROTATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
@@ -48,15 +52,14 @@ export async function rotateMobileRelayCredential(args: {
   }
   let endpoints = await getEndpoints(args.client, pending.reqId)
   if (endpoints.installStatus?.state !== 'committed') {
-    const response = await args.client.sendRequest('pairing.provisionRelay', {
+    const installReply = await relayCredentialProvision.request(args.client, {
       reqId: pending.reqId,
       newResumeTokenHash: pending.hash,
       expectedCurrentHash: bundle.current.hash
     })
-    if (!response.ok) {
-      throw new Error(`${response.error.code}: ${response.error.message}`)
-    }
-    const installed = DeviceCredentialInstalledSchema.parse(response.result)
+    const installed = DeviceCredentialInstalledSchema.parse(
+      relayCredentialProvision.interpret(installReply)
+    )
     endpoints = await getEndpoints(args.client, pending.reqId)
     if (
       endpoints.installStatus?.state !== 'committed' ||
@@ -130,12 +133,41 @@ export function applyResumeConfirmation(
   return bundle
 }
 
-async function getEndpoints(client: RpcClient, installReqId: string) {
-  const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
-  if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`)
+// Applies a migrated session's resume confirmation to the durable bundle and
+// derives the lease expiry to rotate against.
+// Why: rotate against the resume credential's expiry, never the hello's
+// leaseExpiresAt — that field is the cell's ~10s attach-reservation deadline,
+// and using it forced a session replacement every second.
+// Why: renewed=false means a re-resume provably returns the same unchanged
+// deadline — rotating then just churns one replacement per clamp floor until a
+// fresh credential arrives over direct or disk.
+export async function persistResumeConfirmation(args: {
+  session: {
+    getResumeConfirmation(): DeviceResumeConfirmed | null
+    getResumeExpiresAt(): number | null
   }
-  return PairingGetEndpointsResultSchema.parse(response.result)
+  bundle: MobileRelayCredentialBundle
+  usedCredentialVersion: number
+  writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
+}): Promise<{ bundle: MobileRelayCredentialBundle; leaseExpiry: number | null }> {
+  const confirmation = args.session.getResumeConfirmation()
+  let bundle = args.bundle
+  if (confirmation) {
+    bundle = applyResumeConfirmation(bundle, args.usedCredentialVersion, confirmation)
+    // Why: the relay is already authenticated; a SecureStore failure must not
+    // open another socket or count against transport recovery backoff.
+    await args.writeBundle(bundle).catch(() => {})
+  }
+  const leaseExpiry =
+    confirmation?.renewed === false
+      ? null
+      : (confirmation?.resumeExpiresAt ?? args.session.getResumeExpiresAt())
+  return { bundle, leaseExpiry }
+}
+
+async function getEndpoints(client: RpcClient, installReqId: string) {
+  const reply = await relayPairingEndpointsRead.request(client, { installReqId })
+  return PairingGetEndpointsResultSchema.parse(relayPairingEndpointsRead.interpret(reply))
 }
 
 function encodeBase64Url(value: Uint8Array): string {

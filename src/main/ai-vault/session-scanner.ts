@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -7,22 +6,27 @@ import type {
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
+import { CodexSessionCollection, dedupeCodexSessionsBySessionId } from './codex-session-root-dedup'
 import {
   createAntigravityWorkspaceResolver,
+  readLocalAntigravityHistory,
   type AntigravityWorkspaceResolver
 } from './session-scanner-antigravity-history'
-import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
-import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
+import { sessionCandidatesFromDiscoveries } from './session-scanner-candidates'
+import {
+  ensureSessionParseCacheLoaded,
+  scheduleSessionParseCachePersist
+} from './session-parse-cache-persistence'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
   type SessionParseStats
 } from './session-scanner-parse-cache'
+import { recordSessionScanIssue } from './session-scan-issues'
+import { canStopParsingSessions } from './session-scan-cutoff'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
-import {
-  DEFAULT_CODEX_HOME_DIR,
-  discoverAiVaultSessionSources
-} from './session-scanner-source-discovery'
+import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
+import { cursorChatMetaRefusals, withCursorChatMetaScan } from './session-scanner-cursor-chat-meta'
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
@@ -30,13 +34,11 @@ import type {
   SessionParseResult
 } from './session-scanner-types'
 import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
 
-const DEFAULT_LIMIT = 1000
-const DEFAULT_SCAN_LIMIT_PER_AGENT = 1000
 const SESSION_PARSE_CONCURRENCY = 8
-// Upper bound on extra in-scope transcripts discovered and parsed past the
-// recency cap; guards against a pathological scoped history directory.
-const SCOPE_PARSE_LIMIT = 2000
+const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 
 /**
  * Scan all supported AI agent session stores and return a unified, sorted,
@@ -53,72 +55,87 @@ export async function scanAiVaultSessions(
   // The span makes scan cost visible in the local trace file: STA-1278-style
   // "one core pegged" reports need to show whether transcript scanning is the
   // subsystem burning CPU, and how much of each scan the cache absorbed.
-  return withSpan('aiVault.scan', async (span) => {
-    const limit = clampPositiveInteger(options.limit, DEFAULT_LIMIT)
-    const limitPerAgent = clampPositiveInteger(options.limitPerAgent, DEFAULT_SCAN_LIMIT_PER_AGENT)
-    const platform = options.platform ?? process.platform
-    const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-    const issues: AiVaultScanIssue[] = []
-    const parseStats = createSessionParseStats()
-    const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(readOptionalTextFile)
-    const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
-
-    const candidates = discoveries
-      .flatMap((discovery) =>
-        discovery.files.map(
-          (file): SessionFileCandidate => ({
-            agent: discovery.agent,
-            file,
-            codexHome:
-              discovery.agent === 'codex'
-                ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
-                : null,
-            antigravityHistoryPath:
-              discovery.agent === 'antigravity'
-                ? antigravityHistoryPathForBrainDir(discovery.rootDir)
-                : undefined
-          })
-        )
+  // The Cursor chat-meta scope spans discovery AND parse: its sibling meta.json
+  // is looked up in both phases, and one scan must read the chats tree once.
+  return withSpan('aiVault.scan', (span) =>
+    withCursorChatMetaScan(async () => {
+      const limit = options.unlimited
+        ? Number.POSITIVE_INFINITY
+        : clampPositiveInteger(options.limit, DEFAULT_AI_VAULT_SCAN_LIMIT)
+      const limitPerAgent = options.unlimited
+        ? Number.POSITIVE_INFINITY
+        : clampPositiveInteger(options.limitPerAgent, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER)
+      const platform = options.platform ?? process.platform
+      const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+      const issues: AiVaultScanIssue[] = []
+      const parseStats = createSessionParseStats()
+      const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(
+        readLocalAntigravityHistory
       )
-      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+      // Why: persisted entries must be seeded before any candidate is parsed, or
+      // the cold scan gains nothing from the cache file (#9210).
+      throwIfAiVaultScanCancelled(options.signal)
+      await ensureSessionParseCacheLoaded()
+      const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
+      throwIfAiVaultScanCancelled(options.signal)
 
-    const parsedSessions = await parseSessionCandidates({
-      candidates,
-      limit,
-      platform,
-      executionHostId,
-      issues,
-      parseStats,
-      antigravityWorkspaceResolver
+      const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
+
+      const parsedSessions = await parseSessionCandidates({
+        candidates: candidates.slice(0, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER),
+        limit,
+        platform,
+        executionHostId,
+        issues,
+        parseStats,
+        signal: options.signal,
+        antigravityWorkspaceResolver
+      })
+
+      const cappedSessions = dedupeCodexSessionsBySessionId(parsedSessions)
+        .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
+        .slice(0, limit)
+
+      const scopeSessions = await scanInScopeSessions({
+        discoveries,
+        scopePaths: options.scopePaths ?? [],
+        limit,
+        alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
+        platform,
+        executionHostId,
+        issues,
+        parseStats,
+        signal: options.signal
+      })
+      // Scope discovery can return without parsing anything, so an abort landing
+      // here would otherwise persist and return a cancelled scan as complete.
+      throwIfAiVaultScanCancelled(options.signal)
+      for (const refusal of cursorChatMetaRefusals()) {
+        // One issue per refused chats root, not one per Cursor transcript.
+        recordSessionScanIssue(issues, {
+          agent: 'cursor',
+          path: refusal.chatsRoot,
+          message: refusal.message
+        })
+      }
+
+      span.setAttribute('candidates', candidates.length)
+      span.setAttribute('reused', parseStats.reused)
+      span.setAttribute('incremental', parseStats.incremental)
+      span.setAttribute('fullParses', parseStats.fullParses)
+      span.setAttribute('earlyStopped', parseStats.earlyStopped)
+      span.setAttribute('bytesRead', parseStats.bytesRead)
+      span.setAttribute('issues', issues.length)
+
+      scheduleSessionParseCachePersist(parseStats)
+
+      return {
+        sessions: mergeSessions(cappedSessions, scopeSessions),
+        issues: issues.map((issue) => ({ executionHostId, ...issue })),
+        scannedAt: new Date().toISOString()
+      }
     })
-
-    const cappedSessions = parsedSessions
-      .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-      .slice(0, limit)
-
-    const scopeSessions = await scanInScopeSessions({
-      discoveries,
-      scopePaths: options.scopePaths ?? [],
-      alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
-      platform,
-      executionHostId,
-      issues,
-      parseStats
-    })
-
-    span.setAttribute('candidates', candidates.length)
-    span.setAttribute('reused', parseStats.reused)
-    span.setAttribute('incremental', parseStats.incremental)
-    span.setAttribute('fullParses', parseStats.fullParses)
-    span.setAttribute('bytesRead', parseStats.bytesRead)
-    span.setAttribute('issues', issues.length)
-
-    return {
-      sessions: mergeSessions(cappedSessions, scopeSessions),
-      issues: issues.map((issue) => ({ executionHostId, ...issue })),
-      scannedAt: new Date().toISOString()
-    }
-  })
+  )
 }
 
 // In-scope sessions are guaranteed regardless of the recency cap, so the global
@@ -144,11 +161,13 @@ function mergeSessions(
 async function scanInScopeSessions(args: {
   discoveries: SessionFileDiscovery[]
   scopePaths: readonly string[]
+  limit: number
   alreadyParsedFilePaths: ReadonlySet<string>
   platform: NodeJS.Platform
   executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
   parseStats: SessionParseStats
+  signal?: AbortSignal
 }): Promise<AiVaultSession[]> {
   if (args.scopePaths.length === 0) {
     return []
@@ -159,13 +178,15 @@ async function scanInScopeSessions(args: {
   const files = await discoverInScopeClaudeFiles({
     rootDirs: claudeRootDirs,
     scopePaths: args.scopePaths,
-    limit: SCOPE_PARSE_LIMIT,
+    limit: args.limit,
     excludedFilePaths: args.alreadyParsedFilePaths,
     issues: args.issues
   })
-  const candidates = files.map(
-    (file): SessionFileCandidate => ({ agent: 'claude', file, codexHome: null })
-  )
+  const candidates = files.map((file): SessionFileCandidate => ({
+    agent: 'claude',
+    file,
+    codexHome: null
+  }))
   if (candidates.length === 0) {
     return []
   }
@@ -176,7 +197,8 @@ async function scanInScopeSessions(args: {
     platform: args.platform,
     executionHostId: args.executionHostId,
     issues: args.issues,
-    parseStats: args.parseStats
+    parseStats: args.parseStats,
+    signal: args.signal
   })
 }
 
@@ -187,18 +209,20 @@ async function parseSessionCandidates(args: {
   executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
   parseStats: SessionParseStats
+  signal?: AbortSignal
   antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
 }): Promise<AiVaultSession[]> {
-  const sessions: AiVaultSession[] = []
+  const sessions = new CodexSessionCollection()
   let index = 0
 
   while (index < args.candidates.length) {
+    throwIfAiVaultScanCancelled(args.signal)
     if (canStopParsingSessions(sessions, args.limit, args.candidates[index]?.file.mtimeMs)) {
       break
     }
 
     const remaining = args.candidates.length - index
-    const needed = Math.max(args.limit - sessions.length, 1)
+    const needed = Math.max(args.limit - sessions.size, 1)
     const batchSize = Math.min(SESSION_PARSE_CONCURRENCY, needed, remaining)
     const batch = args.candidates.slice(index, index + batchSize)
     const results = await Promise.all(
@@ -215,17 +239,20 @@ async function parseSessionCandidates(args: {
 
     for (const result of results) {
       if (result.issue) {
-        args.issues.push(result.issue)
+        recordSessionScanIssue(args.issues, result.issue)
       }
       if (result.session) {
-        sessions.push(result.session)
+        sessions.add(result.session)
       }
     }
 
     index += batchSize
   }
 
-  return sessions
+  // An abort can land while the final batch settles; observe it here so a
+  // partial parse is never cached or returned as a complete scan.
+  throwIfAiVaultScanCancelled(args.signal)
+  return [...sessions.values()]
 }
 
 async function parseSessionCandidate(
@@ -257,14 +284,6 @@ async function parseSessionCandidate(
   }
 }
 
-async function readOptionalTextFile(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, 'utf-8')
-  } catch {
-    return null
-  }
-}
-
 function withSessionExecutionHost(
   session: AiVaultSession,
   executionHostId: ExecutionHostId
@@ -277,22 +296,4 @@ function withSessionExecutionHost(
     executionHostId,
     id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
   }
-}
-
-function canStopParsingSessions(
-  sessions: AiVaultSession[],
-  limit: number,
-  nextCandidateMtimeMs: number | undefined
-): boolean {
-  if (sessions.length < limit || typeof nextCandidateMtimeMs !== 'number') {
-    return false
-  }
-  const visibleCutoff = sessions
-    .map(sessionSortTime)
-    .sort((left, right) => right - left)
-    .at(limit - 1)
-
-  // Transcript mtime is already our discovery bound and fallback sort key; older
-  // files cannot displace the current visible set once the cutoff is newer.
-  return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff
 }

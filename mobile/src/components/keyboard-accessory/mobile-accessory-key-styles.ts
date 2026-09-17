@@ -2,8 +2,6 @@ import { StyleSheet } from 'react-native'
 
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 
-// Why: single source of truth for the on-screen accessory keyboard styling shared
-// by the terminal and browser tabs, so the two surfaces cannot drift apart again.
 export const accessoryKeyStyles = StyleSheet.create({
   accessoryBar: {
     flexDirection: 'row',

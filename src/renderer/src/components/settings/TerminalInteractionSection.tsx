@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { RotateCcw } from 'lucide-react'
-import { Slider } from '../ui/slider'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { ScrollSpeedSlider } from './TerminalScrollSpeedSlider'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
@@ -25,65 +25,6 @@ type TerminalInteractionSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   searchQuery: string
-}
-
-type ScrollSpeedSliderProps = {
-  label: string
-  description: string
-  value: number
-  min: number
-  max: number
-  step: number
-  suffix: string
-  onChange: (value: number) => void
-}
-
-function formatScrollSpeedValue(value: number): string {
-  return Number.isInteger(value)
-    ? String(value)
-    : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
-}
-
-function ScrollSpeedSlider({
-  label,
-  description,
-  value,
-  min,
-  max,
-  step,
-  suffix,
-  onChange
-}: ScrollSpeedSliderProps): React.JSX.Element {
-  return (
-    <div className="rounded-md border border-border/60 bg-background/50 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-0.5">
-          <Label className="text-xs font-medium">{label}</Label>
-          <p className="text-[11px] leading-4 text-muted-foreground">{description}</p>
-        </div>
-        <span className="shrink-0 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-foreground">
-          {formatScrollSpeedValue(value)}
-          {suffix}
-        </span>
-      </div>
-      <Slider
-        className="mt-3"
-        min={min}
-        max={max}
-        step={step}
-        value={[value]}
-        onValueChange={([next]) => {
-          if (next !== undefined) {
-            onChange(next)
-          }
-        }}
-      />
-      <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
-        <span>{formatScrollSpeedValue(min)}</span>
-        <span>{formatScrollSpeedValue(max)}</span>
-      </div>
-    </div>
-  )
 }
 
 export function TerminalInteractionSection({
@@ -333,6 +274,46 @@ export function TerminalInteractionSection({
         </SearchableSetting>
 
         <SearchableSetting
+          title={translate(
+            'components.settings.TerminalInteraction.copyTrimsGutter',
+            'Trim Gutter on Copy'
+          )}
+          description={translate(
+            'components.settings.TerminalInteraction.copyTrimsGutterDescription',
+            'Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.'
+          )}
+          keywords={[
+            'clipboard',
+            'copy',
+            'gutter',
+            'indent',
+            'margin',
+            'leading',
+            'whitespace',
+            'spaces',
+            'selection',
+            'paste'
+          ]}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'components.settings.TerminalInteraction.copyTrimsGutter',
+              'Trim Gutter on Copy'
+            )}
+            description={translate(
+              'components.settings.TerminalInteraction.copyTrimsGutterDescription',
+              'Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.'
+            )}
+            checked={settings.terminalCopyTrimsGutter}
+            onChange={() =>
+              updateSettings({
+                terminalCopyTrimsGutter: !settings.terminalCopyTrimsGutter
+              })
+            }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
           id={OSC52_CLIPBOARD_SETTING_ID}
           title={translate(
             'auto.components.settings.TerminalPane.3338dcf8c1',
@@ -340,12 +321,13 @@ export function TerminalInteractionSection({
           )}
           description={translate(
             'auto.components.settings.TerminalPane.69c64a479c',
-            'Let Grok, tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).'
+            'Let Zellij, tmux, Neovim, fzf, and Grok copy to the system clipboard over the PTY (including over SSH).'
           )}
           keywords={[
             'osc 52',
             'osc52',
             'clipboard',
+            'zellij',
             'tmux',
             'neovim',
             'nvim',
@@ -364,7 +346,7 @@ export function TerminalInteractionSection({
             )}
             description={translate(
               'auto.components.settings.TerminalPane.6e6480a7df',
-              'Let programs in the terminal (Grok, tmux, Neovim, fzf, SSH) copy to your system clipboard.'
+              'Let programs in the terminal (Zellij, tmux, Neovim, fzf, Grok, SSH) copy to your system clipboard.'
             )}
             checked={settings.terminalAllowOsc52Clipboard}
             onChange={() =>

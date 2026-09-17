@@ -11,8 +11,10 @@ import {
   createDocumentCommentMarkdownComponents,
   documentCommentMarkdownComponents,
   isTrustedCompactImageSrc,
-  type CommentMarkdownLinkClickHandler
+  type CommentMarkdownLinkClickHandler,
+  type DocumentCodeBlockRenderer
 } from './comment-markdown-element-renderers'
+import { remarkNativeChatFileLinks } from './comment-markdown-native-chat-file-links'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -185,6 +187,9 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   githubRepo?: GitHubRepoReference | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
+  linkifyFilePaths?: boolean
+  expandImages?: boolean
+  renderCodeBlock?: DocumentCodeBlockRenderer
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -199,6 +204,9 @@ const CommentMarkdown = React.memo(
       githubRepo,
       onLinkClick,
       allowFileUriLinks = false,
+      linkifyFilePaths = false,
+      expandImages = false,
+      renderCodeBlock,
       ...rest
     },
     ref
@@ -206,17 +214,23 @@ const CommentMarkdown = React.memo(
     const components = React.useMemo(() => {
       if (!onLinkClick) {
         return variant === 'document'
-          ? documentCommentMarkdownComponents
-          : compactCommentMarkdownComponents
+          ? renderCodeBlock
+            ? createDocumentCommentMarkdownComponents(undefined, renderCodeBlock)
+            : documentCommentMarkdownComponents
+          : expandImages
+            ? createCompactCommentMarkdownComponents(undefined, true)
+            : compactCommentMarkdownComponents
       }
       return variant === 'document'
-        ? createDocumentCommentMarkdownComponents(onLinkClick)
-        : createCompactCommentMarkdownComponents(onLinkClick)
-    }, [variant, onLinkClick])
-    const activeRemarkPlugins = React.useMemo(
-      () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
-      [githubRepo]
-    )
+        ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock)
+        : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
+    }, [expandImages, renderCodeBlock, variant, onLinkClick])
+    const activeRemarkPlugins = React.useMemo(() => {
+      const plugins = linkifyFilePaths
+        ? [...remarkPlugins, remarkNativeChatFileLinks]
+        : remarkPlugins
+      return githubRepo ? [...plugins, remarkGitHubReferences(githubRepo)] : plugins
+    }, [githubRepo, linkifyFilePaths])
 
     return (
       <div

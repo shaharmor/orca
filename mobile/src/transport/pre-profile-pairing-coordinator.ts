@@ -7,7 +7,12 @@ import {
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
-import type { HostProfile, PairingOffer, RpcResponse } from './types'
+import type { HostProfile, PairingOffer } from './types'
+import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 import {
   createMobileRelayPairingJournal,
   type MobileRelayPairingJournal
@@ -26,8 +31,11 @@ import {
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
 import { racePairingCandidates, type PairingCandidate } from './pairing-candidate-race'
+import { attributePairingLogPath } from './pairing-log-path'
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
+import { createPairingRelayLogger } from './pairing-relay-log'
+import { redactSocketEndpoint } from './socket-event-debug'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -153,18 +161,25 @@ async function runPairing(
     offer.endpoint,
     offer.deviceToken,
     offer.publicKeyB64,
-    connectOptions
+    { ...connectOptions, onLog: attributePairingLogPath('direct', connectOptions?.onLog) }
   )
   clients.add(directClient)
   const candidates: PairingCandidate[] = [{ path: 'direct', client: directClient }]
+  const log = createPairingRelayLogger(connectOptions?.onLog)
   if (journal) {
+    log(
+      'info',
+      'Relay: pairing candidate started',
+      redactSocketEndpoint(journal.metadata.relay.cellUrl)
+    )
     const relayClient = createRecoveringPairingRelayCandidate({
       journal,
-      connect: (relay) =>
+      connect: (relay, onLog) =>
         dependencies.connectRelay({
           relay,
           deviceToken: offer.deviceToken,
-          desktopPublicKeyB64: offer.publicKeyB64
+          desktopPublicKeyB64: offer.publicKeyB64,
+          onLog
         }),
       resolveDirector: (relay) => dependencies.resolveInviteDirector({ relay }),
       persistMove: async (relay) => {
@@ -181,12 +196,14 @@ async function runPairing(
         }
         await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
       },
-      now: dependencies.now
+      now: dependencies.now,
+      onLog: attributePairingLogPath('relay', connectOptions?.onLog)
     })
     clients.add(relayClient)
     candidates.push({ path: 'relay', client: relayClient })
   }
   const winner = await racePairingCandidates(candidates)
+  log('success', 'Pairing path selected', `winner: ${winner.path}`)
   assertActive(isDisposed)
 
   if (!journal) {
@@ -203,25 +220,29 @@ async function runPairing(
     }
   }
   await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
-  const provision = await winner.client.sendRequest('pairing.provisionRelay', {
+  const provision = await relayCredentialProvision.request(winner.client, {
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
-  if (isMethodNotFound(provision)) {
+  if (isPairingRelayRpcUnavailable(provision)) {
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
+    // Why: this commits a LAN-only host instead of failing, so the refusal code is the only
+    // record of why the phone never got a relay endpoint.
+    log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
     await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
     await dependencies.clearJournal(journal.metadata.journalId)
     return { hostId }
   }
-  const installed = DeviceCredentialInstalledSchema.parse(requireSuccess(provision))
+  const installed = DeviceCredentialInstalledSchema.parse(
+    relayCredentialProvision.interpret(provision)
+  )
+  const endpointsReply = await relayPairingEndpointsRead.request(winner.client, {
+    installReqId: journal.metadata.installReqId
+  })
   const endpoints = PairingGetEndpointsResultSchema.parse(
-    requireSuccess(
-      await winner.client.sendRequest('pairing.getEndpoints', {
-        installReqId: journal.metadata.installReqId
-      })
-    )
+    relayPairingEndpointsRead.interpret(endpointsReply)
   )
   assertCommittedInstall(endpoints.installStatus, installed)
   if (!endpoints.relay) {
@@ -269,17 +290,6 @@ function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
   url.protocol = 'wss:'
   url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
   return url.toString()
-}
-
-function requireSuccess(response: RpcResponse): unknown {
-  if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`)
-  }
-  return response.result
-}
-
-function isMethodNotFound(response: RpcResponse): boolean {
-  return !response.ok && response.error.code === 'method_not_found'
 }
 
 function assertCommittedInstall(

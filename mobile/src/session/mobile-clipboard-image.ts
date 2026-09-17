@@ -1,9 +1,17 @@
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import {
+  clipboardImageSaveAsTempFile,
+  clipboardImageUploadAbort,
+  clipboardImageUploadAppend,
+  clipboardImageUploadCommit,
+  clipboardImageUploadStart,
+  type MobileClipboardImageRpcSender
+} from './mobile-clipboard-image-operations'
 
 export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
 export const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 export const MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
+const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CUTOVER_MAX_RETRIES = 1
 // Why: PNG bytes don't scale exactly with pixel area, so undershoot the target on
 // each pass and let the bounded retry below converge instead of distorting in one shot.
 const MOBILE_CLIPBOARD_IMAGE_DOWNSCALE_SAFETY = 0.85
@@ -92,46 +100,64 @@ export async function prepareMobileClipboardImageBase64(
   return data
 }
 
-function assertSuccess<T>(response: RpcSuccess | RpcFailure): T {
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  return response.result as T
-}
-
 export async function saveMobileClipboardImageAsTempFile(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileClipboardImageRpcSender,
   imageData: string,
   args?: { connectionId?: string | null }
 ): Promise<string> {
   const contentBase64 = normalizeMobileClipboardImageBase64(imageData)
   const connectionId = args?.connectionId ?? null
-  const startResponse = await client.sendRequest('clipboard.startImageUpload', {
+  for (let retry = 0; ; retry += 1) {
+    try {
+      return await uploadMobileClipboardImageTransaction(client, contentBase64, connectionId)
+    } catch (error) {
+      if (
+        !isLogicalClientCutoverError(error) ||
+        retry >= MOBILE_CLIPBOARD_IMAGE_UPLOAD_CUTOVER_MAX_RETRIES
+      ) {
+        throw error
+      }
+      // Why: upload replay can create only temp state; terminal input is sent after this returns.
+    }
+  }
+}
+
+async function uploadMobileClipboardImageTransaction(
+  client: MobileClipboardImageRpcSender,
+  contentBase64: string,
+  connectionId: string | null
+): Promise<string> {
+  const startResponse = await clipboardImageUploadStart.request(client, {
     expectedBase64Length: contentBase64.length,
     connectionId
   })
 
+  // Why the raw refusal: a host too old to offer a slot answers with a code, and a small enough
+  // image then goes over the single-frame method — no acceptance policy carries the code.
   if (!startResponse.ok) {
     if (
       startResponse.error.code === 'method_not_found' &&
       contentBase64.length <= MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
-      return assertSuccess<string>(
-        await client.sendRequest('clipboard.saveImageAsTempFile', { contentBase64, connectionId })
+      return clipboardImageSaveAsTempFile.interpret(
+        await clipboardImageSaveAsTempFile.request(client, { contentBase64, connectionId })
       )
     }
     throw new Error(startResponse.error.message)
   }
 
-  const { uploadId } = startResponse.result as { uploadId: string }
+  // The slot comes off the checked reader now, not off a cast of the raw result. A success
+  // carrying no `uploadId` used to throw a V8 destructuring TypeError whose message the composer
+  // showed verbatim; it is an incompatible reply named by its method instead.
+  const { uploadId } = clipboardImageUploadStart.interpret(startResponse)
   try {
     for (
       let offset = 0;
       offset < contentBase64.length;
       offset += MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
     ) {
-      assertSuccess(
-        await client.sendRequest('clipboard.appendImageUploadChunk', {
+      clipboardImageUploadAppend.interpret(
+        await clipboardImageUploadAppend.request(client, {
           uploadId,
           offset,
           contentBase64: contentBase64.slice(
@@ -141,13 +167,13 @@ export async function saveMobileClipboardImageAsTempFile(
         })
       )
     }
-    return assertSuccess<string>(
-      await client.sendRequest('clipboard.commitImageUpload', { uploadId })
+    return clipboardImageUploadCommit.interpret(
+      await clipboardImageUploadCommit.request(client, { uploadId })
     )
   } catch (error) {
     // Why: failed mobile image sends create server-side upload state; abort so
     // the bounded upload slot is released immediately instead of waiting for TTL.
-    await client.sendRequest('clipboard.abortImageUpload', { uploadId }).catch(() => {})
+    await clipboardImageUploadAbort.request(client, { uploadId }).catch(() => {})
     throw error
   }
 }

@@ -1,4 +1,5 @@
-import type { GitHubWorkItem, GitLabWorkItem } from '../../../src/shared/types'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import {
   normalizeGitHubLinkQuery,
   parseGitHubIssueOrPRLink,
@@ -8,7 +9,14 @@ import {
 import { parseGitLabIssueOrMRLink } from '../../../src/shared/new-workspace/gitlab-links'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { isMethodNotFoundRefusal } from '../transport/rpc-acceptance-policies'
+import {
+  githubRepoSlugRead,
+  githubWorkItemByNumberRead,
+  githubWorkItemBySlugRead,
+  gitlabWorkItemByPathRead
+} from './mobile-task-source-search-operations'
+import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 
 // A repo the picker can switch to for a cross-repo GitHub paste. Slug is derived
 // best-effort from the repo's remote metadata.
@@ -58,11 +66,15 @@ export function resolvePasteIntent(query: string): PasteIntent {
 // Pure: derive an owner/repo slug from a repo's remote metadata so a pasted
 // cross-repo URL can be matched to a locally known repo.
 export function deriveRepoSlug(repo: {
-  upstream?: { owner: string; repo: string } | null
+  upstream?: { owner: string; repo: string; host?: string } | null
   gitRemoteIdentity?: { remoteUrl?: string; canonicalKey?: string } | null
 }): RepoSlug | null {
   if (repo.upstream?.owner && repo.upstream.repo) {
-    return { owner: repo.upstream.owner, repo: repo.upstream.repo }
+    return {
+      owner: repo.upstream.owner,
+      repo: repo.upstream.repo,
+      ...(repo.upstream.host ? { host: repo.upstream.host } : {})
+    }
   }
   const source = repo.gitRemoteIdentity?.remoteUrl ?? repo.gitRemoteIdentity?.canonicalKey ?? ''
   const match = /(?:github\.com[/:]|^)([^/\s:]+)\/([^/\s]+?)(?:\.git)?$/i.exec(source)
@@ -76,9 +88,7 @@ function slugsEqual(a: RepoSlug | null, b: RepoSlug | null): boolean {
   if (!a || !b) {
     return false
   }
-  return (
-    a.owner.toLowerCase() === b.owner.toLowerCase() && a.repo.toLowerCase() === b.repo.toLowerCase()
-  )
+  return githubRepoIdentityKey(a) === githubRepoIdentityKey(b)
 }
 
 export function findRepoMatchingSlug(
@@ -104,14 +114,18 @@ export async function findRepoMatchingSlugForPaste(
     let resolved = cache.get(repo.id)
     if (!cache.has(repo.id)) {
       try {
-        const response = await client.sendRequest('github.repoSlug', { repo: `id:${repo.id}` })
-        if (!response.ok && response.error.code === 'method_not_found') {
+        const reply = await githubRepoSlugRead.request(client, { repo: `id:${repo.id}` })
+        // Why the raw refusal: a missing method retires the probe host-wide, and the acceptance
+        // policy reports only that the reply was refused, not with which code.
+        if (isMethodNotFoundRefusal(reply)) {
           // Why: RPC availability is host-wide; avoid repeating an unsupported
           // probe for every repo or on the next paste attempt.
           repos.forEach((candidate) => cache.set(candidate.id, null))
           return null
         }
-        resolved = response.ok ? ((response as RpcSuccess).result as RepoSlug | null) : null
+        const slug = githubRepoSlugRead.interpret(reply)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        resolved = slug.accepted ? (slug.value as RepoSlug | null) : null
       } catch {
         resolved = null
       }
@@ -129,11 +143,12 @@ export async function lookupGitHubItemByNumber(
   repoId: string,
   number: number
 ): Promise<GitHubWorkItem | null> {
-  const response = await client.sendRequest('github.workItem', { repo: `id:${repoId}`, number })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitHubWorkItem | null
+  const reply = await githubWorkItemByNumberRead.request(client, {
+    repo: `id:${repoId}`,
+    number
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const item = githubWorkItemByNumberRead.interpret(reply) as GitHubWorkItem | null
   return item ? { ...item, repoId } : null
 }
 
@@ -144,17 +159,16 @@ export async function lookupGitHubItemByOwnerRepo(
   number: number,
   type: 'issue' | 'pr'
 ): Promise<GitHubWorkItem | null> {
-  const response = await client.sendRequest('github.workItemByOwnerRepo', {
+  const reply = await githubWorkItemBySlugRead.request(client, {
     repo: `id:${repoId}`,
     owner: slug.owner,
     ownerRepo: slug.repo,
+    ...(slug.host ? { host: slug.host } : {}),
     number,
     type
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitHubWorkItem | null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const item = githubWorkItemBySlugRead.interpret(reply) as GitHubWorkItem | null
   return item ? { ...item, repoId } : null
 }
 
@@ -163,16 +177,14 @@ export async function lookupGitLabItemByPath(
   repoId: string,
   link: NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
 ): Promise<GitLabWorkItem | null> {
-  const response = await client.sendRequest('gitlab.workItemByPath', {
+  const reply = await gitlabWorkItemByPathRead.request(client, {
     repo: `id:${repoId}`,
     host: link.slug.host,
     path: link.slug.path,
     iid: link.number,
     type: link.type
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitLabWorkItem | null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const item = gitlabWorkItemByPathRead.interpret(reply) as GitLabWorkItem | null
   return item ? { ...item, repoId } : null
 }

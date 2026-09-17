@@ -1,5 +1,6 @@
 import React from 'react'
 import type { Components } from 'react-markdown'
+import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat-href-routing'
 import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 import {
   GitHubUserAttachmentImage,
@@ -7,11 +8,25 @@ import {
   isGitHubUserAttachmentUrl,
   isGitHubUserAttachmentVideoLink
 } from './comment-markdown-github-attachment-media'
+import { ExpandableMarkdownImage } from './MarkdownImageLightbox'
 
 export type CommentMarkdownLinkClickHandler = (
   event: React.MouseEvent<HTMLElement>,
   href: string | undefined
 ) => void
+
+export type DocumentCodeBlockRenderer = (props: {
+  children?: React.ReactNode
+  language?: string
+}) => React.JSX.Element
+
+function extractCodeFenceLanguage(children: React.ReactNode): string | undefined {
+  const child = React.Children.toArray(children)[0]
+  if (!React.isValidElement<{ className?: string }>(child)) {
+    return undefined
+  }
+  return child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
+}
 
 export function isTrustedCompactImageSrc(src: string | undefined): src is string {
   if (!src) {
@@ -31,10 +46,24 @@ function handleMarkdownAnchorClick(
   // Why: link clicks should not also trigger an outer row/card click handler;
   // images only claim the click when an image handler is wired below.
   event.stopPropagation()
-  if (href?.trim().toLowerCase().startsWith('file:')) {
+  const trimmedHref = href?.trim()
+  if (
+    trimmedHref?.toLowerCase().startsWith('file:') ||
+    trimmedHref?.startsWith(NATIVE_CHAT_FILE_HREF_PREFIX)
+  ) {
     event.preventDefault()
   }
   onLinkClick?.(event, href)
+}
+
+function handleMarkdownAnchorAuxClick(
+  event: React.MouseEvent<HTMLAnchorElement>,
+  href: string | undefined,
+  onLinkClick: CommentMarkdownLinkClickHandler | undefined
+): void {
+  if (event.button === 1) {
+    handleMarkdownAnchorClick(event, href, onLinkClick)
+  }
 }
 
 function handleMarkdownImageClick(
@@ -50,7 +79,8 @@ function handleMarkdownImageClick(
 }
 
 export function createCompactCommentMarkdownComponents(
-  onLinkClick?: CommentMarkdownLinkClickHandler
+  onLinkClick?: CommentMarkdownLinkClickHandler,
+  expandImages = false
 ): Components {
   return {
     // Strip <p> wrappers to avoid double margins in the tight card layout.
@@ -63,6 +93,7 @@ export function createCompactCommentMarkdownComponents(
         rel="noreferrer"
         className="underline underline-offset-2 text-foreground/80 hover:text-foreground"
         onClick={(e) => handleMarkdownAnchorClick(e, href, onLinkClick)}
+        onAuxClick={(e) => handleMarkdownAnchorAuxClick(e, href, onLinkClick)}
       >
         {children}
       </a>
@@ -97,14 +128,38 @@ export function createCompactCommentMarkdownComponents(
     li: ({ children }) => (
       <li className="leading-normal [&>input]:pointer-events-none">{children}</li>
     ),
-    // Headings render as bold text at the same size — no visual hierarchy needed
-    // in a tiny sidebar card.
-    h1: ({ children }) => <span className="font-bold">{children}</span>,
-    h2: ({ children }) => <span className="font-bold">{children}</span>,
-    h3: ({ children }) => <span className="font-semibold">{children}</span>,
-    h4: ({ children }) => <span className="font-semibold">{children}</span>,
-    h5: ({ children }) => <span className="font-semibold">{children}</span>,
-    h6: ({ children }) => <span className="font-semibold">{children}</span>,
+    // Spans preserve compact flow on shared surfaces; roles keep the source
+    // heading hierarchy navigable when the PR sidebar promotes them visually.
+    h1: ({ children }) => (
+      <span className="comment-md-h comment-md-h1 font-bold" role="heading" aria-level={1}>
+        {children}
+      </span>
+    ),
+    h2: ({ children }) => (
+      <span className="comment-md-h comment-md-h2 font-bold" role="heading" aria-level={2}>
+        {children}
+      </span>
+    ),
+    h3: ({ children }) => (
+      <span className="comment-md-h comment-md-h3 font-semibold" role="heading" aria-level={3}>
+        {children}
+      </span>
+    ),
+    h4: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={4}>
+        {children}
+      </span>
+    ),
+    h5: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={5}>
+        {children}
+      </span>
+    ),
+    h6: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={6}>
+        {children}
+      </span>
+    ),
     // Horizontal rules as a subtle divider
     hr: () => <hr className="my-1 border-border/50" />,
     // Compact blockquotes
@@ -128,9 +183,21 @@ export function createCompactCommentMarkdownComponents(
             rel="noreferrer"
             className="underline underline-offset-2 text-foreground/80 hover:text-foreground"
             onClick={(e) => handleMarkdownAnchorClick(e, src, onLinkClick)}
+            onAuxClick={(e) => handleMarkdownAnchorAuxClick(e, src, onLinkClick)}
           >
             {alt || src}
           </a>
+        )
+      }
+
+      if (expandImages) {
+        return (
+          <ExpandableMarkdownImage
+            src={src}
+            alt={alt}
+            triggerClassName="my-1"
+            className="max-h-32 max-w-full rounded-sm object-contain outline outline-1 outline-border/70"
+          />
         )
       }
 
@@ -147,6 +214,7 @@ export function createCompactCommentMarkdownComponents(
           target="_blank"
           rel="noreferrer"
           onClick={(e) => handleMarkdownAnchorClick(e, src, onLinkClick)}
+          onAuxClick={(e) => handleMarkdownAnchorAuxClick(e, src, onLinkClick)}
         >
           {image}
         </a>
@@ -168,7 +236,8 @@ export function createCompactCommentMarkdownComponents(
 }
 
 export function createDocumentCommentMarkdownComponents(
-  onLinkClick?: CommentMarkdownLinkClickHandler
+  onLinkClick?: CommentMarkdownLinkClickHandler,
+  renderCodeBlock?: DocumentCodeBlockRenderer
 ): Components {
   return {
     p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
@@ -184,6 +253,7 @@ export function createDocumentCommentMarkdownComponents(
           rel="noreferrer"
           className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
           onClick={(e) => handleMarkdownAnchorClick(e, href, onLinkClick)}
+          onAuxClick={(e) => handleMarkdownAnchorAuxClick(e, href, onLinkClick)}
         >
           {children}
         </a>
@@ -203,6 +273,8 @@ export function createDocumentCommentMarkdownComponents(
     pre: ({ children }) =>
       isMermaidPre(children) ? (
         <>{children}</>
+      ) : renderCodeBlock ? (
+        renderCodeBlock({ children, language: extractCodeFenceLanguage(children) })
       ) : (
         <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
           {children}
@@ -238,20 +310,31 @@ export function createDocumentCommentMarkdownComponents(
         // back to a text link when the image itself can't render.
         return <GitHubUserAttachmentImage src={src} alt={alt} />
       }
-      const imageClassName = [
-        'my-3 max-h-96 max-w-full rounded-md object-contain',
-        'outline outline-1 outline-black/10 dark:outline-white/10',
-        onLinkClick ? 'cursor-pointer' : ''
-      ]
-        .filter(Boolean)
-        .join(' ')
-
+      if (!src) {
+        return alt ? <span>{alt}</span> : null
+      }
+      // Why: Jira/Linear/GitHub document bodies often embed screenshots; open a
+      // viewport-centered lightbox so the preview is not trapped in the drawer.
+      if (onLinkClick) {
+        const imageClassName = [
+          'my-3 max-h-96 max-w-full rounded-md object-contain',
+          'outline outline-1 outline-black/10 dark:outline-white/10',
+          'cursor-pointer'
+        ].join(' ')
+        return (
+          <img
+            src={src}
+            alt={alt ?? ''}
+            className={imageClassName}
+            onClick={(e) => handleMarkdownImageClick(e, src, onLinkClick)}
+          />
+        )
+      }
       return (
-        <img
+        <ExpandableMarkdownImage
           src={src}
-          alt={alt ?? ''}
-          className={imageClassName}
-          onClick={(e) => handleMarkdownImageClick(e, src, onLinkClick)}
+          alt={alt}
+          className="max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-black/10 dark:outline-white/10"
         />
       )
     },
