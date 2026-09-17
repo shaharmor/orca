@@ -106,11 +106,6 @@ export function runTerminalSearchNavigation(
       )
 }
 
-// Repeating the find shortcut edits the current query rather than closing search.
-export function resolveSearchToggleAction(searchOpen: boolean): 'open' | 'refocus' {
-  return searchOpen ? 'refocus' : 'open'
-}
-
 export function matchFileSearchShortcut(
   e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
   platform: KeybindingPlatform,

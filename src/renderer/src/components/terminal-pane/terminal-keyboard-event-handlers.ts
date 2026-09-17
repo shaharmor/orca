@@ -179,6 +179,18 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     if (isEditableTarget(e.target)) {
+      if (
+        searchOpenRef.current &&
+        e.target instanceof HTMLElement &&
+        e.target.closest('[data-terminal-search-root]') &&
+        resolveShortcutEvent(e)?.type === 'toggleSearch'
+      ) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        if (!e.repeat) {
+          focusSearchInput()
+        }
+      }
       return
     }
 

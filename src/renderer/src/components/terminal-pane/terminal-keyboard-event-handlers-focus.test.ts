@@ -20,6 +20,7 @@ describe('terminal keyboard pane ownership', () => {
       active = paneId === focused.id ? focused : first
     })
     const sendFocused = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the complete Enter path; unused runtime dependencies intentionally remain absent.
     const handlers = createTerminalKeyboardEventHandlers({
       isMac: false,
       isWindows: false,

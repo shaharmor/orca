@@ -8,10 +8,7 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
-import {
-  resolveSearchToggleAction,
-  type resolveTerminalKeyboardShortcutAction
-} from './terminal-keyboard-shortcut-matching'
+import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
@@ -102,7 +99,7 @@ export function dispatchTerminalShortcutAction(
   if (action.type === 'toggleSearch') {
     event.preventDefault()
     event.stopImmediatePropagation()
-    if (resolveSearchToggleAction(searchOpenRef.current) === 'refocus') {
+    if (searchOpenRef.current) {
       focusSearchInput()
     } else {
       setSearchOpen(true)
