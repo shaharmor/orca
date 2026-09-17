@@ -40,12 +40,7 @@ export default function TerminalSearch({
   const [results, setResults] = useState(EMPTY_RESULTS)
   const requestQuery = getFindRequestQuery(query)
 
-  // Why: the default xterm SearchAddon highlights blend into common
-  // terminal backgrounds (see orca#612). Providing explicit decoration
-  // colors gives all matches a visible yellow background and the
-  // current match a brighter orange, matching the contrast VS Code and
-  // iTerm2 use for terminal search. xterm requires #RRGGBB format for
-  // the background colors.
+  // xterm needs hex colors; explicit highlights stay visible over terminal themes (#612).
   const searchOptions = useCallback(
     (incremental: boolean = false) => ({
       caseSensitive,
@@ -88,7 +83,6 @@ export default function TerminalSearch({
       if (inputRef) {
         inputRef.current = input
       }
-      // Why: focus + select on open so the query is immediately editable.
       input?.focus()
       input?.select()
     },
@@ -101,19 +95,14 @@ export default function TerminalSearch({
       return
     }
     const disposable = searchAddon.onDidChangeResults(setResults)
-    return () => disposable.dispose()
+    return () => {
+      disposable.dispose()
+      clearTerminalSearch(searchAddon)
+    }
   }, [searchAddon])
 
-  useEffect(
-    () => () => {
-      clearTerminalSearch(searchAddon)
-    },
-    [searchAddon]
-  )
-
   useEffect(() => {
-    // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
-    // can read the current search state without lifting it to parent state.
+    // Global match-navigation shortcuts read the same query as the panel.
     searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex }
 
     if (!isOpen || !requestQuery) {
