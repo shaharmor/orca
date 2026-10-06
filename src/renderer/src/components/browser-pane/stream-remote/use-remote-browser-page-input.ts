@@ -193,7 +193,10 @@ export function useRemoteBrowserPageInput({
     const historyMethod = getRemoteBrowserHistoryMethod(event.button)
     if (historyMethod) {
       event.preventDefault()
-      void runRemoteNavigation(historyMethod)
+      // Why queue: a click still in flight must land before Back, or Back undoes the wrong entry.
+      void enqueueRemoteInput(async () => {
+        await runRemoteNavigation(historyMethod)
+      })
       return
     }
     if (busy) {

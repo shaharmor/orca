@@ -1,18 +1,28 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createHarness } from './remote-browser-stream-lifecycle-test-harness'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn(async () => ({})) }))
+const mocks = vi.hoisted(() => ({
+  callRuntimeRpc: vi.fn(async (..._args: unknown[]) => ({}))
+}))
 
-import { useRemoteBrowserPageInput } from './use-remote-browser-page-input'
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
-const runRemoteNavigation = vi.fn()
-const enqueueRemoteInput = vi.fn(async () => {})
+import {
+  useRemoteBrowserPageInput,
+  useRemoteBrowserPageInputQueue
+} from './use-remote-browser-page-input'
+
+const log: string[] = []
+const runRemoteNavigation = vi.fn(async (method: string) => {
+  log.push(method)
+})
 
 function Frame(): React.JSX.Element {
   const { lifecycle } = createHarness()
   lifecycle.tokens.setRemotePage('page-1')
+  const { enqueueRemoteInput } = useRemoteBrowserPageInputQueue()
   const viewport = document.createElement('div')
   // Why: happy-dom lays nothing out; left clicks need a non-empty rect to map to a page point.
   viewport.getBoundingClientRect = () => new DOMRect(0, 0, 100, 100)
@@ -45,37 +55,64 @@ function Frame(): React.JSX.Element {
   )
 }
 
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
 describe('remote browser frame mouse Back/Forward', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    log.length = 0
   })
 
-  it('goes back in the remote page on Back release without sending mouse input', () => {
+  it('goes back in the remote page on Back release without sending mouse input', async () => {
     render(<Frame />)
     const frame = screen.getByTestId('frame')
 
     expect(fireEvent.pointerDown(frame, { button: 3 })).toBe(false)
     expect(fireEvent.pointerUp(frame, { button: 3 })).toBe(false)
+    await settle()
 
     expect(runRemoteNavigation).toHaveBeenCalledExactlyOnceWith('browser.back')
-    expect(enqueueRemoteInput).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
-  it('goes forward in the remote page on Forward release', () => {
+  it('goes forward in the remote page on Forward release', async () => {
     render(<Frame />)
 
     fireEvent.pointerUp(screen.getByTestId('frame'), { button: 4 })
+    await settle()
 
     expect(runRemoteNavigation).toHaveBeenCalledExactlyOnceWith('browser.forward')
   })
 
-  it('keeps sending left clicks to the remote page', () => {
+  it('waits for a click still in flight before going back', async () => {
+    let releaseMouseUp = (): void => {}
+    mocks.callRuntimeRpc.mockImplementation(async (_target, method) => {
+      if (method === 'browser.mouseUp') {
+        await new Promise<void>((resolve) => {
+          releaseMouseUp = resolve
+        })
+      }
+      log.push(String(method))
+      return {}
+    })
     render(<Frame />)
+    const frame = screen.getByTestId('frame')
 
-    fireEvent.pointerDown(screen.getByTestId('frame'), { button: 0 })
-
+    fireEvent.pointerDown(frame, { button: 0 })
+    fireEvent.pointerUp(frame, { button: 0 })
+    fireEvent.pointerUp(frame, { button: 3 })
+    await settle()
     expect(runRemoteNavigation).not.toHaveBeenCalled()
-    expect(enqueueRemoteInput).toHaveBeenCalledOnce()
+
+    releaseMouseUp()
+    await settle()
+
+    expect(log.at(-2)).toBe('browser.mouseUp')
+    expect(log.at(-1)).toBe('browser.back')
   })
 })

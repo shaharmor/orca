@@ -18,40 +18,66 @@ describe('installMouseHistoryButtons', () => {
   })
 
   function press(
-    type: 'mousedown' | 'mouseup',
+    type: 'pointerdown' | 'pointerup',
     button: number,
     target: EventTarget = document.body
-  ): MouseEvent {
-    const event = new MouseEvent(type, { button, bubbles: true, cancelable: true })
+  ): PointerEvent {
+    const event = new PointerEvent(type, { button, bubbles: true, cancelable: true })
     target.dispatchEvent(event)
     return event
   }
 
+  function click(button: number, down: EventTarget, up: EventTarget = down): PointerEvent[] {
+    return [press('pointerdown', button, down), press('pointerup', button, up)]
+  }
+
+  function pageSurface(markup: string): Element {
+    const host = document.createElement('div')
+    host.innerHTML = markup
+    document.body.append(host)
+    const target = host.querySelector('img, canvas')
+    if (!target) {
+      throw new Error('page surface markup has no img or canvas')
+    }
+    return target
+  }
+
   it('runs history back on mouse Back release', () => {
-    const event = press('mouseup', 3)
+    const [, up] = click(3, document.body)
 
     expect(runHistoryAction).toHaveBeenCalledExactlyOnceWith('worktree.history.back')
-    expect(event.defaultPrevented).toBe(true)
+    expect(up.defaultPrevented).toBe(true)
   })
 
   it('runs history forward on mouse Forward release', () => {
-    press('mouseup', 4)
+    click(4, document.body)
 
     expect(runHistoryAction).toHaveBeenCalledExactlyOnceWith('worktree.history.forward')
   })
 
   it('cancels the press without navigating so one click moves one step', () => {
-    const down = press('mousedown', 3)
+    const down = press('pointerdown', 3)
     expect(down.defaultPrevented).toBe(true)
     expect(runHistoryAction).not.toHaveBeenCalled()
 
-    press('mouseup', 3)
+    press('pointerup', 3)
     expect(runHistoryAction).toHaveBeenCalledOnce()
   })
 
+  it('still claims a press whose pointerdown an element already cancelled', () => {
+    // Why: Chromium then suppresses the compat mouse events, so only pointer listeners can act.
+    const divider = document.createElement('div')
+    divider.addEventListener('pointerdown', (event) => event.preventDefault())
+    document.body.append(divider)
+
+    const [, up] = click(3, divider)
+
+    expect(up.defaultPrevented).toBe(true)
+    expect(runHistoryAction).toHaveBeenCalledExactlyOnceWith('worktree.history.back')
+  })
+
   it.each([0, 1, 2])('ignores button %i', (button) => {
-    const down = press('mousedown', button)
-    const up = press('mouseup', button)
+    const [down, up] = click(button, document.body)
 
     expect(down.defaultPrevented).toBe(false)
     expect(up.defaultPrevented).toBe(false)
@@ -60,12 +86,10 @@ describe('installMouseHistoryButtons', () => {
 
   it('cancels but does not navigate worktree history inside a browser page surface', () => {
     // Same literal markup the remote screencast frame renders.
-    document.body.innerHTML = '<div data-browser-page-surface=""><img></div>'
-    const inner = document.querySelector('img')!
-    expect(inner.closest(`[${BROWSER_PAGE_SURFACE_ATTRIBUTE}]`)).not.toBeNull()
+    const frame = pageSurface('<div data-browser-page-surface=""><img></div>')
+    expect(frame.closest(`[${BROWSER_PAGE_SURFACE_ATTRIBUTE}]`)).not.toBeNull()
 
-    const down = press('mousedown', 3, inner)
-    const up = press('mouseup', 3, inner)
+    const [down, up] = click(3, frame)
 
     expect(down.defaultPrevented).toBe(true)
     expect(up.defaultPrevented).toBe(true)
@@ -76,30 +100,52 @@ describe('installMouseHistoryButtons', () => {
     const webview = document.createElement('webview')
     document.body.append(webview)
 
-    const up = press('mouseup', 4, webview)
+    const [, up] = click(4, webview)
 
     expect(up.defaultPrevented).toBe(true)
     expect(runHistoryAction).not.toHaveBeenCalled()
   })
 
-  it('ignores events an earlier capture handler already claimed', () => {
-    uninstall()
-    const claim = (event: Event): void => event.preventDefault()
-    window.addEventListener('mouseup', claim, { capture: true })
-    uninstall = installMouseHistoryButtons(window, runHistoryAction)
+  it('leaves an annotation overlay drawn over a page to the page', () => {
+    const canvas = pageSurface('<div data-orca-markup-overlay=""><canvas></canvas></div>')
 
-    press('mouseup', 3)
+    click(3, canvas)
 
-    window.removeEventListener('mouseup', claim, { capture: true })
     expect(runHistoryAction).not.toHaveBeenCalled()
+  })
+
+  it('keeps a press that started on a page with the page when released over Orca chrome', () => {
+    const frame = pageSurface('<div data-browser-page-surface=""><img></div>')
+
+    click(3, frame, document.body)
+
+    expect(runHistoryAction).not.toHaveBeenCalled()
+  })
+
+  it('keeps a press that started on Orca chrome out of worktree history when released on a page', () => {
+    const frame = pageSurface('<div data-browser-page-surface=""><img></div>')
+
+    click(3, document.body, frame)
+
+    expect(runHistoryAction).not.toHaveBeenCalled()
+  })
+
+  it('forgets a press interrupted by window blur', () => {
+    const frame = pageSurface('<div data-browser-page-surface=""><img></div>')
+    press('pointerdown', 3, frame)
+    window.dispatchEvent(new Event('blur'))
+
+    press('pointerup', 3, document.body)
+
+    expect(runHistoryAction).toHaveBeenCalledOnce()
   })
 
   it('stops listening after uninstall', () => {
     uninstall()
 
-    const event = press('mouseup', 3)
+    const [, up] = click(3, document.body)
 
-    expect(event.defaultPrevented).toBe(false)
+    expect(up.defaultPrevented).toBe(false)
     expect(runHistoryAction).not.toHaveBeenCalled()
   })
 })

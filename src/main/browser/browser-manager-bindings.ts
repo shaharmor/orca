@@ -63,16 +63,16 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
     )
   }
 
-  protected setupMouseWheelZoomForwarding(browserTabId: string, guest: Electron.WebContents): void {
-    const previousCleanup = this.mouseWheelZoomCleanupByTabId.get(browserTabId)
+  protected setupGuestMouseForwarding(browserTabId: string, guest: Electron.WebContents): void {
+    const previousCleanup = this.guestMouseCleanupByTabId.get(browserTabId)
     if (previousCleanup) {
       previousCleanup()
-      this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
+      this.guestMouseCleanupByTabId.delete(browserTabId)
     }
 
     const resolveRenderer = (tabId: string): Electron.WebContents | null =>
       resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
-    // Why share the wheel slot: both are guest mouse listeners with the same lifetime.
+    // Why history first: wheel stays the most recently added before-mouse-event listener.
     const historyCleanup = setupGuestMouseHistoryForwarding({
       browserTabId,
       guest,
@@ -90,7 +90,7 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
       onViewportWheelConsumed: (deltaX, deltaY) =>
         this.recordViewportScrollDelta(browserTabId, deltaX, deltaY)
     })
-    this.mouseWheelZoomCleanupByTabId.set(browserTabId, () => {
+    this.guestMouseCleanupByTabId.set(browserTabId, () => {
       wheelCleanup()
       historyCleanup()
     })
