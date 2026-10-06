@@ -121,6 +121,17 @@ describe('remote browser frame mouse Back/Forward', () => {
     expect(setPointerCapture).toHaveBeenCalledWith(7)
   })
 
+  it('captures the pointer for a side button chorded with the primary button', () => {
+    render(<Frame />)
+    const frame = screen.getByTestId('frame')
+    const setPointerCapture = vi.fn()
+    frame.setPointerCapture = setPointerCapture
+
+    fireEvent.pointerMove(frame, { button: 4, buttons: 1 | 16, pointerId: 7 })
+
+    expect(setPointerCapture).toHaveBeenCalledWith(7)
+  })
+
   it('ignores a release whose press began over Orca chrome', async () => {
     render(<Frame />)
 

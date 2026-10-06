@@ -26,10 +26,7 @@ export function useRemoteBrowserSideButtonPress({
     event.preventDefault()
     if (transition.phase === 'press') {
       // Why capture: mouse pointers get no implicit capture, so a release over chrome would be lost.
-      // A chorded press arrives while another button already owns the pointer, so skip it there.
-      if (event.type === 'pointerdown') {
-        event.currentTarget.setPointerCapture?.(event.pointerId)
-      }
+      event.currentTarget.setPointerCapture?.(event.pointerId)
       pendingButtonRef.current = transition.button
       return true
     }
