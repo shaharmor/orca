@@ -105,11 +105,14 @@ export function useRemoteBrowserPageInput({
   }) => { x: number; y: number } | null
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
+  handleRemoteSideButtonMove: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteLostPointerCapture: () => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
 } {
-  const { claimSideButtonDown, claimSideButtonUp, handleRemoteLostPointerCapture } =
-    useRemoteBrowserSideButtonPress({ enqueueRemoteInput, runRemoteNavigation })
+  const { claimSideButton, handleRemoteLostPointerCapture } = useRemoteBrowserSideButtonPress({
+    enqueueRemoteInput,
+    runRemoteNavigation
+  })
   const getRemoteImagePoint = useCallback(
     (event: { clientX: number; clientY: number }): { x: number; y: number } | null => {
       const image = imageRef.current
@@ -136,7 +139,7 @@ export function useRemoteBrowserPageInput({
   )
 
   const handleRemotePointerDown = (event: React.PointerEvent<HTMLImageElement>): void => {
-    if (claimSideButtonDown(event) || busy) {
+    if (claimSideButton(event) || busy) {
       return
     }
     const target = runtimeTarget()
@@ -188,7 +191,7 @@ export function useRemoteBrowserPageInput({
   }
 
   const handleRemotePointerUp = (event: React.PointerEvent<HTMLImageElement>): void => {
-    if (claimSideButtonUp(event) || busy) {
+    if (claimSideButton(event) || busy) {
       return
     }
     const target = runtimeTarget()
@@ -294,6 +297,7 @@ export function useRemoteBrowserPageInput({
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
+    handleRemoteSideButtonMove: claimSideButton,
     handleRemoteLostPointerCapture,
     handleRemoteScreenshotKeyDown
   }

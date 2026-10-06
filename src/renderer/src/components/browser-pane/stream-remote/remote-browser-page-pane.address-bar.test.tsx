@@ -83,6 +83,7 @@ vi.mock('./use-remote-browser-page-input', () => ({
     getRemoteImagePoint: () => null,
     handleRemotePointerDown: vi.fn(),
     handleRemotePointerUp: vi.fn(),
+    handleRemoteSideButtonMove: vi.fn(),
     handleRemoteLostPointerCapture: vi.fn(),
     handleRemoteScreenshotKeyDown: vi.fn()
   })

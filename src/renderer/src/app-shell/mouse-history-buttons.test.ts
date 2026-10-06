@@ -18,11 +18,12 @@ describe('installMouseHistoryButtons', () => {
   })
 
   function press(
-    type: 'pointerdown' | 'pointerup',
+    type: 'pointerdown' | 'pointerup' | 'pointermove',
     button: number,
-    target: EventTarget = document.body
+    target: EventTarget = document.body,
+    buttons = 0
   ): PointerEvent {
-    const event = new PointerEvent(type, { button, bubbles: true, cancelable: true })
+    const event = new PointerEvent(type, { button, buttons, bubbles: true, cancelable: true })
     target.dispatchEvent(event)
     return event
   }
@@ -74,6 +75,34 @@ describe('installMouseHistoryButtons', () => {
 
     expect(up.defaultPrevented).toBe(true)
     expect(runHistoryAction).toHaveBeenCalledExactlyOnceWith('worktree.history.back')
+  })
+
+  it('handles a side button pressed and released while the primary button is held', () => {
+    // Why: a chorded transition arrives as pointermove with button set, not pointerdown/up.
+    press('pointerdown', 0, document.body, 1)
+    const chordDown = press('pointermove', 3, document.body, 1 | 8)
+    expect(chordDown.defaultPrevented).toBe(true)
+    expect(runHistoryAction).not.toHaveBeenCalled()
+
+    const chordUp = press('pointermove', 3, document.body, 1)
+
+    expect(chordUp.defaultPrevented).toBe(true)
+    expect(runHistoryAction).toHaveBeenCalledExactlyOnceWith('worktree.history.back')
+  })
+
+  it('leaves ordinary pointer moves alone', () => {
+    const move = press('pointermove', -1, document.body, 1)
+
+    expect(move.defaultPrevented).toBe(false)
+    expect(runHistoryAction).not.toHaveBeenCalled()
+  })
+
+  it('cancels the side-button mouseup that carries the browser default', () => {
+    // Why: a cancelled pointermove does not suppress compat mouse events the way pointerdown does.
+    const event = new MouseEvent('mouseup', { button: 4, bubbles: true, cancelable: true })
+    document.body.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
   })
 
   it.each([0, 1, 2])('ignores button %i', (button) => {

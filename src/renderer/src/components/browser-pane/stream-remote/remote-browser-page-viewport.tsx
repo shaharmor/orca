@@ -49,6 +49,7 @@ export function RemoteBrowserPageViewport({
   onReconnect,
   handleRemotePointerDown,
   handleRemotePointerUp,
+  handleRemoteSideButtonMove,
   handleRemoteLostPointerCapture,
   handleRemoteContextMenu,
   handleRemoteScreenshotKeyDown
@@ -74,6 +75,7 @@ export function RemoteBrowserPageViewport({
   onReconnect: () => void
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
+  handleRemoteSideButtonMove: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteLostPointerCapture: () => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
@@ -112,6 +114,7 @@ export function RemoteBrowserPageViewport({
           className="absolute top-0 left-0 max-w-none cursor-default bg-white outline-none"
           onPointerDown={handleRemotePointerDown}
           onPointerUp={handleRemotePointerUp}
+          onPointerMove={handleRemoteSideButtonMove}
           onLostPointerCapture={handleRemoteLostPointerCapture}
           onContextMenu={handleRemoteContextMenu}
           onKeyDown={handleRemoteScreenshotKeyDown}
