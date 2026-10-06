@@ -7,6 +7,7 @@
  *   - De-dup: re-activating the current worktree does not grow history.
  *   - Forward-stack truncation after a mid-history activation.
  *   - Keyboard shortcuts fire the same back/forward path as clicks.
+ *   - Mouse Back/Forward side buttons fire the same path, one step per press.
  *   - Shortcuts no-op in non-terminal views (buttons also hidden there).
  */
 
@@ -83,6 +84,18 @@ async function getForwardButton(page: Page) {
 
 const isMac = process.platform === 'darwin'
 const mod = isMac ? 'Meta' : 'Control'
+
+/** Press and release a side mouse button through CDP, as real hardware input would arrive. */
+async function clickMouseSideButton(page: Page, button: 'back' | 'forward'): Promise<void> {
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    for (const type of ['mousePressed', 'mouseReleased'] as const) {
+      await cdp.send('Input.dispatchMouseEvent', { type, x: 10, y: 200, button, clickCount: 1 })
+    }
+  } finally {
+    await cdp.detach()
+  }
+}
 
 test.describe('Workspace Back/Forward Navigation', () => {
   test.beforeEach(async ({ orcaPage }) => {
@@ -242,6 +255,59 @@ test.describe('Workspace Back/Forward Navigation', () => {
         message: `${mod}+Alt+Right did not navigate forward`
       })
       .toBe(secondaryId)
+  })
+
+  test('mouse Back/Forward side buttons walk history one step per press', async ({ orcaPage }) => {
+    const worktreeIds = await getAllWorktreeIds(orcaPage)
+    test.skip(worktreeIds.length < 2, 'Need at least two worktrees to exercise mouse buttons')
+    const [primaryId, secondaryId] = worktreeIds
+
+    // Why three entries: a double step from index 2 lands on index 0, so the index proves one step.
+    await resetNavHistory(orcaPage)
+    await seedVisit(orcaPage, secondaryId)
+    await seedVisit(orcaPage, primaryId)
+    await seedVisit(orcaPage, secondaryId)
+    const urlBefore = orcaPage.url()
+
+    await clickMouseSideButton(orcaPage, 'back')
+    await expect
+      .poll(async () => getActiveWorktreeId(orcaPage), {
+        message: 'Mouse Back did not navigate back'
+      })
+      .toBe(primaryId)
+    await orcaPage.waitForTimeout(150)
+    expect((await getNavHistorySnapshot(orcaPage)).index).toBe(1)
+
+    await clickMouseSideButton(orcaPage, 'forward')
+    await expect
+      .poll(async () => getActiveWorktreeId(orcaPage), {
+        message: 'Mouse Forward did not navigate forward'
+      })
+      .toBe(secondaryId)
+    expect((await getNavHistorySnapshot(orcaPage)).index).toBe(2)
+    // Why: Blink's default for these buttons navigates the document; the renderer must stay put.
+    expect(orcaPage.url()).toBe(urlBefore)
+  })
+
+  test('mouse Back is a no-op in settings view', async ({ orcaPage }) => {
+    const worktreeIds = await getAllWorktreeIds(orcaPage)
+    test.skip(worktreeIds.length < 2, 'Need at least two worktrees to exercise settings gating')
+    const [primaryId, secondaryId] = worktreeIds
+
+    await resetNavHistory(orcaPage)
+    await seedVisit(orcaPage, primaryId)
+    await seedVisit(orcaPage, secondaryId)
+    await orcaPage.evaluate(() => {
+      window.__store!.getState().openSettingsPage()
+    })
+    const urlBefore = orcaPage.url()
+
+    await clickMouseSideButton(orcaPage, 'back')
+
+    await orcaPage.waitForTimeout(150)
+    expect(await getActiveWorktreeId(orcaPage)).toBe(secondaryId)
+    expect((await getNavHistorySnapshot(orcaPage)).index).toBe(1)
+    expect(orcaPage.url()).toBe(urlBefore)
   })
 
   test('shortcut is a no-op in settings view', async ({ orcaPage }) => {
