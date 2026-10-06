@@ -13,6 +13,7 @@ import type {
 } from './remote-browser-stream-tokens'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import {
+  getRemoteBrowserHistoryMethod,
   getRemoteBrowserMouseButton,
   resolveRemoteBrowserCssViewport,
   type PendingRemoteBrowserWheel,
@@ -78,7 +79,8 @@ export function useRemoteBrowserPageInput({
   isCurrentRemoteOperationToken,
   closeMissingRemotePage,
   scheduleRemoteTabInfoRefresh,
-  setPaneNotice
+  setPaneNotice,
+  runRemoteNavigation
 }: {
   busy: boolean
   imageRef: React.RefObject<HTMLImageElement | null>
@@ -95,6 +97,7 @@ export function useRemoteBrowserPageInput({
   closeMissingRemotePage: (remotePageId?: string | null) => void
   scheduleRemoteTabInfoRefresh: (token: RemoteBrowserOperationToken, delayMs?: number) => void
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
+  runRemoteNavigation: (method: 'browser.back' | 'browser.forward') => Promise<void> | void
 }): {
   getRemoteImagePoint: (event: {
     clientX: number
@@ -130,6 +133,11 @@ export function useRemoteBrowserPageInput({
   )
 
   const handleRemotePointerDown = (event: React.PointerEvent<HTMLImageElement>): void => {
+    if (getRemoteBrowserHistoryMethod(event.button)) {
+      // Why: navigation fires on release; cancel the press so it never reaches the remote page.
+      event.preventDefault()
+      return
+    }
     if (busy) {
       return
     }
@@ -182,6 +190,12 @@ export function useRemoteBrowserPageInput({
   }
 
   const handleRemotePointerUp = (event: React.PointerEvent<HTMLImageElement>): void => {
+    const historyMethod = getRemoteBrowserHistoryMethod(event.button)
+    if (historyMethod) {
+      event.preventDefault()
+      void runRemoteNavigation(historyMethod)
+      return
+    }
     if (busy) {
       return
     }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRemoteContextMenuExpression,
   getPositiveFiniteNumber,
+  getRemoteBrowserHistoryMethod,
   getRemoteBrowserMouseButton,
   readRemoteContextMenuResult,
   readRemoteCssViewportSize,
@@ -14,6 +15,13 @@ describe('remote browser page input model', () => {
     expect(getRemoteBrowserMouseButton(1)).toBe('middle')
     expect(getRemoteBrowserMouseButton(2)).toBe('right')
     expect(getRemoteBrowserMouseButton(3)).toBeNull()
+  })
+
+  it('maps the side Back/Forward buttons to remote page history', () => {
+    expect(getRemoteBrowserHistoryMethod(3)).toBe('browser.back')
+    expect(getRemoteBrowserHistoryMethod(4)).toBe('browser.forward')
+    expect(getRemoteBrowserHistoryMethod(0)).toBeNull()
+    expect(getRemoteBrowserHistoryMethod(2)).toBeNull()
   })
 
   it('accepts only positive finite numbers', () => {

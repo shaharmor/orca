@@ -101,6 +101,7 @@ export function RemoteBrowserPageViewport({
       {frameUrl ? (
         <img
           data-testid="remote-browser-frame"
+          data-browser-page-surface=""
           ref={imageRef}
           src={frameUrl}
           alt=""

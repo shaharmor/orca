@@ -280,7 +280,8 @@ export function RemoteBrowserPagePane({
     isCurrentRemoteOperationToken,
     closeMissingRemotePage,
     scheduleRemoteTabInfoRefresh,
-    setPaneNotice
+    setPaneNotice,
+    runRemoteNavigation
   })
 
   useRemoteBrowserPageWheel({

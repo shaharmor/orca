@@ -90,6 +90,13 @@ export function getRemoteBrowserMouseButton(button: number): 'left' | 'middle' |
   return null
 }
 
+/** Side mouse Back/Forward drive the remote page's history, never raw mouse input. */
+export function getRemoteBrowserHistoryMethod(
+  button: number
+): 'browser.back' | 'browser.forward' | null {
+  return button === 3 ? 'browser.back' : button === 4 ? 'browser.forward' : null
+}
+
 export function buildRemoteContextMenuExpression(x: number, y: number): string {
   return `(() => {
     const target = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
