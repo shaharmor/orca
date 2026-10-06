@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
 import type { AppShortcutState } from './app-command-handlers'
 
 const mocks = vi.hoisted(() => ({
@@ -9,11 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../store', () => ({
   useAppStore: Object.assign(vi.fn(), {
-    getState: () =>
-      ({
-        goBackWorktree: mocks.goBackWorktree,
-        goForwardWorktree: mocks.goForwardWorktree
-      }) as Partial<AppState>
+    getState: () => mocks
   })
 }))
 
@@ -31,7 +26,15 @@ function shortcutState(overrides: Partial<AppShortcutState> = {}): AppShortcutSt
   return {
     activeView: 'terminal',
     activeWorktreeId: 'repo::/feature',
-    actions: {} as AppShortcutState['actions'],
+    actions: {
+      toggleSidebar: vi.fn(),
+      toggleRightSidebar: vi.fn(),
+      setRightSidebarOpen: vi.fn(),
+      setRightSidebarTab: vi.fn(),
+      showRightSidebarFiles: vi.fn(),
+      showRightSidebarSearch: vi.fn(),
+      openDiffNotesSendMenuForActiveWorktree: vi.fn()
+    },
     creationLayoutActive: false,
     floatingTerminalEnabled: false,
     floatingTerminalOpen: false,

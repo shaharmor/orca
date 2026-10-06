@@ -59,11 +59,10 @@ describe('installMouseHistoryButtons', () => {
   })
 
   it('cancels but does not navigate worktree history inside a browser page surface', () => {
-    const surface = document.createElement('div')
-    surface.setAttribute(BROWSER_PAGE_SURFACE_ATTRIBUTE, '')
-    const inner = document.createElement('img')
-    surface.append(inner)
-    document.body.append(surface)
+    // Same literal markup the remote screencast frame renders.
+    document.body.innerHTML = '<div data-browser-page-surface=""><img></div>'
+    const inner = document.querySelector('img')!
+    expect(inner.closest(`[${BROWSER_PAGE_SURFACE_ATTRIBUTE}]`)).not.toBeNull()
 
     const down = press('mousedown', 3, inner)
     const up = press('mouseup', 3, inner)
