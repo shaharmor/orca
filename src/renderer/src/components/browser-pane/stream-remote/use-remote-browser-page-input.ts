@@ -13,13 +13,13 @@ import type {
 } from './remote-browser-stream-tokens'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import {
-  getRemoteBrowserHistoryMethod,
   getRemoteBrowserMouseButton,
   resolveRemoteBrowserCssViewport,
   type PendingRemoteBrowserWheel,
   type RemoteBrowserPaneNotice,
   type RemoteBrowserRuntimeTarget
 } from './remote-browser-page-input-model'
+import { useRemoteBrowserSideButtonPress } from './use-remote-browser-side-button-press'
 
 export function useRemoteBrowserPageInputQueue(): {
   enqueueRemoteInput: (operation: () => Promise<void>) => Promise<void>
@@ -105,8 +105,11 @@ export function useRemoteBrowserPageInput({
   }) => { x: number; y: number } | null
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
+  handleRemoteLostPointerCapture: () => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
 } {
+  const { claimSideButtonDown, claimSideButtonUp, handleRemoteLostPointerCapture } =
+    useRemoteBrowserSideButtonPress({ enqueueRemoteInput, runRemoteNavigation })
   const getRemoteImagePoint = useCallback(
     (event: { clientX: number; clientY: number }): { x: number; y: number } | null => {
       const image = imageRef.current
@@ -133,12 +136,7 @@ export function useRemoteBrowserPageInput({
   )
 
   const handleRemotePointerDown = (event: React.PointerEvent<HTMLImageElement>): void => {
-    if (getRemoteBrowserHistoryMethod(event.button)) {
-      // Why: navigation fires on release; cancel the press so it never reaches the remote page.
-      event.preventDefault()
-      return
-    }
-    if (busy) {
+    if (claimSideButtonDown(event) || busy) {
       return
     }
     const target = runtimeTarget()
@@ -190,16 +188,7 @@ export function useRemoteBrowserPageInput({
   }
 
   const handleRemotePointerUp = (event: React.PointerEvent<HTMLImageElement>): void => {
-    const historyMethod = getRemoteBrowserHistoryMethod(event.button)
-    if (historyMethod) {
-      event.preventDefault()
-      // Why queue: a click still in flight must land before Back, or Back undoes the wrong entry.
-      void enqueueRemoteInput(async () => {
-        await runRemoteNavigation(historyMethod)
-      })
-      return
-    }
-    if (busy) {
+    if (claimSideButtonUp(event) || busy) {
       return
     }
     const target = runtimeTarget()
@@ -305,6 +294,7 @@ export function useRemoteBrowserPageInput({
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
+    handleRemoteLostPointerCapture,
     handleRemoteScreenshotKeyDown
   }
 }

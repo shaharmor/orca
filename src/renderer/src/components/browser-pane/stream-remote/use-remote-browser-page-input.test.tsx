@@ -26,31 +26,33 @@ function Frame(): React.JSX.Element {
   const viewport = document.createElement('div')
   // Why: happy-dom lays nothing out; left clicks need a non-empty rect to map to a page point.
   viewport.getBoundingClientRect = () => new DOMRect(0, 0, 100, 100)
-  const { handleRemotePointerDown, handleRemotePointerUp } = useRemoteBrowserPageInput({
-    busy: false,
-    imageRef: { current: document.createElement('img') },
-    remoteViewportRef: { current: viewport },
-    remoteCssViewportSizeRef: { current: { width: 100, height: 100 } },
-    remoteViewportSizeRef: { current: { width: 100, height: 100 } },
-    frameMetadata: null,
-    runtimeTarget: () => ({ kind: 'environment', environmentId: 'env-1' }),
-    lifecycle,
-    runtimeWorktree: 'worktree-a',
-    enqueueRemoteInput,
-    createRemoteOperationToken: (remotePageId) =>
-      lifecycle.tokens.createOperationToken(remotePageId),
-    isCurrentRemoteOperationToken: () => true,
-    closeMissingRemotePage: vi.fn(),
-    scheduleRemoteTabInfoRefresh: vi.fn(),
-    setPaneNotice: vi.fn(),
-    runRemoteNavigation
-  })
+  const { handleRemotePointerDown, handleRemotePointerUp, handleRemoteLostPointerCapture } =
+    useRemoteBrowserPageInput({
+      busy: false,
+      imageRef: { current: document.createElement('img') },
+      remoteViewportRef: { current: viewport },
+      remoteCssViewportSizeRef: { current: { width: 100, height: 100 } },
+      remoteViewportSizeRef: { current: { width: 100, height: 100 } },
+      frameMetadata: null,
+      runtimeTarget: () => ({ kind: 'environment', environmentId: 'env-1' }),
+      lifecycle,
+      runtimeWorktree: 'worktree-a',
+      enqueueRemoteInput,
+      createRemoteOperationToken: (remotePageId) =>
+        lifecycle.tokens.createOperationToken(remotePageId),
+      isCurrentRemoteOperationToken: () => true,
+      closeMissingRemotePage: vi.fn(),
+      scheduleRemoteTabInfoRefresh: vi.fn(),
+      setPaneNotice: vi.fn(),
+      runRemoteNavigation
+    })
   return (
     <img
       alt=""
       data-testid="frame"
       onPointerDown={handleRemotePointerDown}
       onPointerUp={handleRemotePointerUp}
+      onLostPointerCapture={handleRemoteLostPointerCapture}
     />
   )
 }
@@ -82,11 +84,45 @@ describe('remote browser frame mouse Back/Forward', () => {
 
   it('goes forward in the remote page on Forward release', async () => {
     render(<Frame />)
+    const frame = screen.getByTestId('frame')
 
-    fireEvent.pointerUp(screen.getByTestId('frame'), { button: 4 })
+    fireEvent.pointerDown(frame, { button: 4 })
+    fireEvent.pointerUp(frame, { button: 4 })
     await settle()
 
     expect(runRemoteNavigation).toHaveBeenCalledExactlyOnceWith('browser.forward')
+  })
+
+  it('captures the pointer so a release over Orca chrome still reaches the page', () => {
+    render(<Frame />)
+    const frame = screen.getByTestId('frame')
+    const setPointerCapture = vi.fn()
+    frame.setPointerCapture = setPointerCapture
+
+    fireEvent.pointerDown(frame, { button: 3, pointerId: 7 })
+
+    expect(setPointerCapture).toHaveBeenCalledWith(7)
+  })
+
+  it('ignores a release whose press began over Orca chrome', async () => {
+    render(<Frame />)
+
+    fireEvent.pointerUp(screen.getByTestId('frame'), { button: 3 })
+    await settle()
+
+    expect(runRemoteNavigation).not.toHaveBeenCalled()
+  })
+
+  it('drops a press whose capture was lost before release', async () => {
+    render(<Frame />)
+    const frame = screen.getByTestId('frame')
+
+    fireEvent.pointerDown(frame, { button: 3 })
+    fireEvent.lostPointerCapture(frame)
+    fireEvent.pointerUp(frame, { button: 3 })
+    await settle()
+
+    expect(runRemoteNavigation).not.toHaveBeenCalled()
   })
 
   it('waits for a click still in flight before going back', async () => {
@@ -105,6 +141,7 @@ describe('remote browser frame mouse Back/Forward', () => {
 
     fireEvent.pointerDown(frame, { button: 0 })
     fireEvent.pointerUp(frame, { button: 0 })
+    fireEvent.pointerDown(frame, { button: 3 })
     fireEvent.pointerUp(frame, { button: 3 })
     await settle()
     expect(runRemoteNavigation).not.toHaveBeenCalled()

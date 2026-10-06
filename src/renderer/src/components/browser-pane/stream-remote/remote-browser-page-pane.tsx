@@ -264,6 +264,7 @@ export function RemoteBrowserPagePane({
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
+    handleRemoteLostPointerCapture,
     handleRemoteScreenshotKeyDown
   } = useRemoteBrowserPageInput({
     busy,
@@ -425,6 +426,7 @@ export function RemoteBrowserPagePane({
         onReconnect={reconnectRemoteStream}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}
+        handleRemoteLostPointerCapture={handleRemoteLostPointerCapture}
         handleRemoteContextMenu={handleRemoteContextMenu}
         handleRemoteScreenshotKeyDown={handleRemoteScreenshotKeyDown}
       />
