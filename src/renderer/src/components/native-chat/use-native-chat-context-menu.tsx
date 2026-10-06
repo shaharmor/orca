@@ -17,6 +17,7 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
+  SquareArrowOutUpRight,
   SquareTerminal,
   X
 } from 'lucide-react'
@@ -66,6 +67,8 @@ export type NativeChatContextMenuActions = {
   canExpandPane: boolean
   isPaneExpanded: boolean
   onToggleExpand: () => void
+  canMovePaneToNewTab: boolean
+  onMovePaneToNewTab: () => void
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
   onForkAgentSession: () => void
@@ -87,6 +90,8 @@ export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuAction
   canExpandPane: false,
   isPaneExpanded: false,
   onToggleExpand: () => {},
+  canMovePaneToNewTab: false,
+  onMovePaneToNewTab: () => {},
   canContinueAgentSessionInNewSession: false,
   onContinueAgentSessionInNewSession: () => {},
   onForkAgentSession: () => {},
@@ -278,6 +283,15 @@ export function useNativeChatContextMenu({
                         'auto.components.terminal.pane.TerminalContextMenu.925f49f210',
                         'Expand Pane'
                       )}
+                </DropdownMenuItem>
+              ) : null}
+              {actions.canMovePaneToNewTab ? (
+                <DropdownMenuItem onSelect={actions.onMovePaneToNewTab}>
+                  <SquareArrowOutUpRight />
+                  {translate(
+                    'components.terminalPane.TerminalContextMenu.movePaneToNewTab',
+                    'Move Pane to New Tab'
+                  )}
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuSeparator />
