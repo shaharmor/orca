@@ -48,6 +48,8 @@ import {
 } from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const PROVIDER_SESSION = 'provider-session-alpha-1'
 /** The tool call's row: the last thing the provider wrote before the crash. */
@@ -71,7 +73,7 @@ function crashedClaudeRecord(): AgentSessionRecord {
     providerHandleChain: [
       {
         linkId,
-        handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null },
+        handle: claudeProviderHandle(PROVIDER_SESSION, null),
         origin: 'created',
         mintedAtFence: 13,
         observedAt: TOOL_STARTED_AT - 60_000
@@ -120,7 +122,7 @@ async function seedClaudeToolTurn(): Promise<void> {
       workspaceId: LOCATION.workspaceId,
       hostId: LOCATION.executionHostId,
       agent: 'claude',
-      providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null }
+      providerHandle: claudeProviderHandle(PROVIDER_SESSION, null)
     },
     database: openTestJournalHostDatabase(root),
     now: () => now
@@ -158,6 +160,7 @@ async function seedClaudeToolTurn(): Promise<void> {
 
 function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): void {
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
@@ -435,7 +438,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
           process,
           link: {
             linkId: `claude-${fence}-link`,
-            handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null },
+            handle: claudeProviderHandle(PROVIDER_SESSION, null),
             origin: 'resumed',
             mintedAtFence: fence,
             observedAt: RELAUNCHED_AT
@@ -513,7 +516,7 @@ async function hostWithFailingFirstStart(failure: Error) {
         process,
         link: {
           linkId: `claude-${fence}-link`,
-          handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: null },
+          handle: claudeProviderHandle(PROVIDER_SESSION, null),
           origin: 'resumed',
           mintedAtFence: fence,
           observedAt: now

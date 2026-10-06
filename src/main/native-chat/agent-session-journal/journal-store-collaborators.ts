@@ -17,6 +17,7 @@ import { JournalStopMarks } from './journal-stop-marks'
 import { journalQueuePauseRestatement } from './queued-message-pause'
 import type { JournalReducerState } from './journal-reducer'
 import { JournalRowWriter } from './journal-row-writer'
+import { JournalStepWriter } from './journal-step-writer'
 import { restoreJournalStore } from './journal-store-restore'
 import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
@@ -40,14 +41,9 @@ export type JournalStoreHost = {
   database: () => JournalHostDatabase
   state: () => JournalReducerState
   readOnly: () => boolean
-  setReadOnly: (readOnly: boolean) => void
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
   commit: (row: JournalRow) => void
-  /** Records whether the open's replay found an unusable prefix. */
-  setOpenedCorrupt: (corrupt: boolean) => void
-  malformedRows: () => number
-  setMalformedRows: (count: number) => void
   journal: () => AgentSessionJournal
   enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
 }
@@ -57,6 +53,7 @@ export type JournalStoreCollaborators = {
   epochController: JournalEpochController
   itemAppender: JournalItemAppender
   lifecycleBatchAppender: JournalLifecycleBatchAppender
+  stepWriter: JournalStepWriter
   queuedMessages: JournalQueuedMessages
   stopMarks: JournalStopMarks
   /** Restores the store's state from disk. Owned here because it needs the same
@@ -72,7 +69,6 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     serialize: host.serialize,
     database: host.database,
     readOnly: host.readOnly,
-    setReadOnly: host.setReadOnly,
     highestFence: () => host.state().highestFence,
     queuePauseRestatement: () =>
       journalQueuePauseRestatement(
@@ -106,6 +102,12 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     inTransaction: (db, row) => queuedMessages.onRowInTransaction(db, row),
     rolledBack: () => queuedMessages.invalidate()
   })
+  const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
+    state: host.state,
+    cursor: host.cursor,
+    enqueue: host.enqueue,
+    enqueueRows: (plan) => rowWriter.enqueueRows(plan)
+  })
   return {
     epochController,
     queuedMessages,
@@ -121,11 +123,12 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       state: host.state,
       enqueue: host.enqueue
     }),
-    lifecycleBatchAppender: new JournalLifecycleBatchAppender({
+    lifecycleBatchAppender,
+    stepWriter: new JournalStepWriter({
+      serialize: host.serialize,
       state: host.state,
-      cursor: host.cursor,
-      enqueue: host.enqueue,
-      enqueueRows: (plan) => rowWriter.enqueueRows(plan)
+      writeRows: (plan) => rowWriter.writeRows(plan),
+      planSettlement: (batch) => lifecycleBatchAppender.planResolved(batch)
     })
   }
 }
