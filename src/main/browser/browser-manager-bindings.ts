@@ -1,6 +1,7 @@
 import { resolveRendererWebContents } from './browser-guest-renderer-target'
 import { setupGuestContextMenu } from './browser-guest-context-menu'
 import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
+import { setupGuestMouseHistoryForwarding } from './browser-guest-mouse-history'
 import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 import { BrowserManagerGrab } from './browser-manager-grab'
@@ -69,21 +70,29 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
       this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
     }
 
-    this.mouseWheelZoomCleanupByTabId.set(
+    const resolveRenderer = (tabId: string): Electron.WebContents | null =>
+      resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
+    // Why share the wheel slot: both are guest mouse listeners with the same lifetime.
+    const historyCleanup = setupGuestMouseHistoryForwarding({
       browserTabId,
-      setupGuestMouseWheelZoomForwarding({
-        browserTabId,
-        guest,
-        resolveRenderer: (tabId) =>
-          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        isViewportPresetActive: () => {
-          const state = this.viewportPresetByTabId.get(browserTabId)
-          return state?.guestWebContentsId === guest.id && state.requested !== null
-        },
-        canViewportScroll: (mouse) => this.canViewportScroll(browserTabId, mouse),
-        onViewportWheelConsumed: (deltaX, deltaY) =>
-          this.recordViewportScrollDelta(browserTabId, deltaX, deltaY)
-      })
-    )
+      guest,
+      resolveRenderer
+    })
+    const wheelCleanup = setupGuestMouseWheelZoomForwarding({
+      browserTabId,
+      guest,
+      resolveRenderer,
+      isViewportPresetActive: () => {
+        const state = this.viewportPresetByTabId.get(browserTabId)
+        return state?.guestWebContentsId === guest.id && state.requested !== null
+      },
+      canViewportScroll: (mouse) => this.canViewportScroll(browserTabId, mouse),
+      onViewportWheelConsumed: (deltaX, deltaY) =>
+        this.recordViewportScrollDelta(browserTabId, deltaX, deltaY)
+    })
+    this.mouseWheelZoomCleanupByTabId.set(browserTabId, () => {
+      wheelCleanup()
+      historyCleanup()
+    })
   }
 }
