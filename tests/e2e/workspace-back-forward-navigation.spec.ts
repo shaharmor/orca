@@ -21,6 +21,7 @@ import {
   ensureTerminalVisible
 } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
+import { hostHistoryProbeIsCurrent, pushHostHistoryProbe } from './helpers/host-history-probe'
 
 /**
  * Record a visit through the same two store calls that
@@ -262,12 +263,12 @@ test.describe('Workspace Back/Forward Navigation', () => {
     test.skip(worktreeIds.length < 2, 'Need at least two worktrees to exercise mouse buttons')
     const [primaryId, secondaryId] = worktreeIds
 
-    // Why three entries: a double step from index 2 lands on index 0, so the index proves one step.
+    // Why three entries: a double step from either end skips the middle, so the index proves one step.
     await resetNavHistory(orcaPage)
     await seedVisit(orcaPage, secondaryId)
     await seedVisit(orcaPage, primaryId)
     await seedVisit(orcaPage, secondaryId)
-    const urlBefore = orcaPage.url()
+    await pushHostHistoryProbe(orcaPage)
 
     await clickMouseSideButton(orcaPage, 'back')
     await expect
@@ -278,15 +279,18 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await orcaPage.waitForTimeout(150)
     expect((await getNavHistorySnapshot(orcaPage)).index).toBe(1)
 
+    await clickMouseSideButton(orcaPage, 'back')
+    await expect.poll(async () => getActiveWorktreeId(orcaPage)).toBe(secondaryId)
     await clickMouseSideButton(orcaPage, 'forward')
     await expect
       .poll(async () => getActiveWorktreeId(orcaPage), {
         message: 'Mouse Forward did not navigate forward'
       })
-      .toBe(secondaryId)
-    expect((await getNavHistorySnapshot(orcaPage)).index).toBe(2)
+      .toBe(primaryId)
+    await orcaPage.waitForTimeout(150)
+    expect((await getNavHistorySnapshot(orcaPage)).index).toBe(1)
     // Why: Blink's default for these buttons navigates the document; the renderer must stay put.
-    expect(orcaPage.url()).toBe(urlBefore)
+    expect(await hostHistoryProbeIsCurrent(orcaPage)).toBe(true)
   })
 
   test('mouse Back is a no-op in settings view', async ({ orcaPage }) => {
@@ -300,14 +304,17 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await orcaPage.evaluate(() => {
       window.__store!.getState().openSettingsPage()
     })
-    const urlBefore = orcaPage.url()
+    await expect
+      .poll(async () => orcaPage.evaluate(() => window.__store!.getState().activeView))
+      .toBe('settings')
+    await pushHostHistoryProbe(orcaPage)
 
     await clickMouseSideButton(orcaPage, 'back')
 
     await orcaPage.waitForTimeout(150)
     expect(await getActiveWorktreeId(orcaPage)).toBe(secondaryId)
     expect((await getNavHistorySnapshot(orcaPage)).index).toBe(1)
-    expect(orcaPage.url()).toBe(urlBefore)
+    expect(await hostHistoryProbeIsCurrent(orcaPage)).toBe(true)
   })
 
   test('shortcut is a no-op in settings view', async ({ orcaPage }) => {

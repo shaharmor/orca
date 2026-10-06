@@ -12,9 +12,12 @@ import {
   startBrowserSplitPageServer,
   type BrowserSplitPageServer
 } from './helpers/browser-split-page-server'
+import { hostHistoryProbeIsCurrent, pushHostHistoryProbe } from './helpers/host-history-probe'
 import {
   ensureTerminalVisible,
   getActiveWorktreeId,
+  getAllWorktreeIds,
+  getStoreState,
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
@@ -69,21 +72,54 @@ async function clickSideButtonInGuest(
   )
 }
 
-/** Delivers the button to the host renderer at the webview's position. */
-async function clickSideButtonOverWebviewInHost(
+async function worktreeHistoryIndex(page: Page): Promise<number> {
+  return getStoreState<number>(page, 'worktreeNavHistoryIndex')
+}
+
+/** Ends history on the active worktree with somewhere to go back to, so a stray step shows. */
+async function seedNavigableWorktreeHistory(page: Page): Promise<void> {
+  const activeId = await getActiveWorktreeId(page)
+  const otherId = (await getAllWorktreeIds(page)).find((id) => id !== activeId)
+  if (!activeId || !otherId) {
+    throw new Error('Need two worktrees to seed navigable history')
+  }
+  await page.evaluate(
+    ({ first, last }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store unavailable')
+      }
+      store.setState({ worktreeNavHistory: [], worktreeNavHistoryIndex: -1 })
+      store.getState().recordWorktreeVisit(first)
+      store.getState().recordWorktreeVisit(last)
+    },
+    { first: otherId, last: activeId }
+  )
+  expect(await worktreeHistoryIndex(page)).toBe(1)
+}
+
+/** Center of an element in the main renderer, for CDP input; waits for it to be laid out. */
+async function centerOf(page: Page, selector: string): Promise<{ x: number; y: number }> {
+  const readCenter = (): Promise<{ x: number; y: number } | null> =>
+    page.evaluate((target) => {
+      const rect = document.querySelector(target)?.getBoundingClientRect()
+      return rect && rect.width > 0 && rect.height > 0
+        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+        : null
+    }, selector)
+  await expect.poll(readCenter, { message: `${selector} never got a layout box` }).not.toBeNull()
+  const point = await readCenter()
+  if (!point) {
+    throw new Error(`${selector} lost its layout box`)
+  }
+  return point
+}
+
+async function clickSideButtonInHost(
   page: Page,
-  browserTabId: string,
+  point: { x: number; y: number },
   button: MouseSideButton
 ): Promise<void> {
-  const point = await page.evaluate((tabId) => {
-    const rect = document
-      .querySelector(`[data-browser-overlay-tab-id="${tabId}"] webview`)
-      ?.getBoundingClientRect()
-    return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null
-  }, browserTabId)
-  if (!point) {
-    throw new Error('Browser guest has no layout box')
-  }
   const cdp = await page.context().newCDPSession(page)
   try {
     for (const type of ['mousePressed', 'mouseReleased'] as const) {
@@ -92,14 +128,6 @@ async function clickSideButtonOverWebviewInHost(
   } finally {
     await cdp.detach()
   }
-}
-
-async function worktreeHistoryIndex(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    type StoreLike = { getState: () => { worktreeNavHistoryIndex: number } }
-    const store = window.__store as unknown as StoreLike
-    return store.getState().worktreeNavHistoryIndex
-  })
 }
 
 test.describe('browser mouse Back/Forward', () => {
@@ -124,8 +152,8 @@ test.describe('browser mouse Back/Forward', () => {
     await waitForGuestUrl(orcaPage, fixture.browserTabId, server.pageUrl('a', 1))
     await navigateGuest(orcaPage, fixture.browserTabId, server.pageUrl('a', 2))
     await waitForGuestIdle(orcaPage, fixture.browserTabId)
+    await seedNavigableWorktreeHistory(orcaPage)
     const worktreeBefore = await getActiveWorktreeId(orcaPage)
-    const historyIndexBefore = await worktreeHistoryIndex(orcaPage)
     const guestId = await guestWebContentsId(orcaPage, fixture.browserTabId)
 
     await clickSideButtonInGuest(electronApp, guestId, 'back')
@@ -135,7 +163,7 @@ test.describe('browser mouse Back/Forward', () => {
     await waitForGuestUrl(orcaPage, fixture.browserTabId, server.pageUrl('a', 2))
 
     expect(await getActiveWorktreeId(orcaPage)).toBe(worktreeBefore)
-    expect(await worktreeHistoryIndex(orcaPage)).toBe(historyIndexBefore)
+    expect(await worktreeHistoryIndex(orcaPage)).toBe(1)
   })
 
   test('a press the host sees over a local page leaves worktree history alone', async ({
@@ -145,15 +173,38 @@ test.describe('browser mouse Back/Forward', () => {
     await waitForGuestUrl(orcaPage, fixture.browserTabId, server.pageUrl('a', 1))
     await navigateGuest(orcaPage, fixture.browserTabId, server.pageUrl('a', 2))
     await waitForGuestIdle(orcaPage, fixture.browserTabId)
+    await seedNavigableWorktreeHistory(orcaPage)
     const worktreeBefore = await getActiveWorktreeId(orcaPage)
-    const historyIndexBefore = await worktreeHistoryIndex(orcaPage)
-    const hostUrlBefore = orcaPage.url()
+    await pushHostHistoryProbe(orcaPage)
 
-    await clickSideButtonOverWebviewInHost(orcaPage, fixture.browserTabId, 'back')
+    await clickSideButtonInHost(
+      orcaPage,
+      await centerOf(orcaPage, `[data-browser-overlay-tab-id="${fixture.browserTabId}"] webview`),
+      'back'
+    )
 
     await orcaPage.waitForTimeout(300)
     expect(await getActiveWorktreeId(orcaPage)).toBe(worktreeBefore)
-    expect(await worktreeHistoryIndex(orcaPage)).toBe(historyIndexBefore)
-    expect(orcaPage.url()).toBe(hostUrlBefore)
+    expect(await worktreeHistoryIndex(orcaPage)).toBe(1)
+    expect(await hostHistoryProbeIsCurrent(orcaPage)).toBe(true)
+  })
+
+  test('Back over a split divider that cancels pointerdown steps worktree history', async ({
+    orcaPage
+  }) => {
+    await createTerminalBrowserSplit(orcaPage, server.pageUrl('a', 1))
+    await seedNavigableWorktreeHistory(orcaPage)
+    const [previousId] = await getStoreState<string[]>(orcaPage, 'worktreeNavHistory')
+    await pushHostHistoryProbe(orcaPage)
+
+    // Why the divider: its pointerdown calls preventDefault, which suppresses compat mouse events.
+    await clickSideButtonInHost(
+      orcaPage,
+      await centerOf(orcaPage, '.tab-group-split-resize-handle'),
+      'back'
+    )
+
+    await expect.poll(async () => getActiveWorktreeId(orcaPage)).toBe(previousId)
+    expect(await hostHistoryProbeIsCurrent(orcaPage)).toBe(true)
   })
 })
