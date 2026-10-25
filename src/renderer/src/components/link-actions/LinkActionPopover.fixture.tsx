@@ -1,4 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { buildHttpLinkActions } from '@/lib/http-link-destinations'
 import { LinkActionPopover } from './LinkActionPopover'
 import type { LinkActionRequest } from './link-action-request'
@@ -22,6 +23,29 @@ export const urlLink = defineFixture({
   render: () => (
     <div className="h-[150px]">
       <LinkActionPopover request={urlRequest} onClose={() => {}} />
+    </div>
+  )
+})
+
+// Same click with Microsoft Edge chosen as the default browser.
+export const urlLinkConfiguredBrowser = defineFixture({
+  width: 380,
+  store: {
+    settings: {
+      ...getDefaultSettings('/home/fixture'),
+      externalBrowserId: 'com.microsoft.edgemac'
+    },
+    installedBrowsers: [{ id: 'com.microsoft.edgemac', name: 'Microsoft Edge' }]
+  },
+  render: () => (
+    <div className="h-[150px]">
+      <LinkActionPopover
+        request={{
+          ...urlRequest,
+          ...buildHttpLinkActions({ primary: 'system', alternate: 'orca' }, () => {})
+        }}
+        onClose={() => {}}
+      />
     </div>
   )
 })

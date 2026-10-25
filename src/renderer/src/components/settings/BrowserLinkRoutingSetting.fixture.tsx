@@ -20,3 +20,31 @@ export const linkRouting = defineFixture({
     />
   )
 })
+
+// Dropdown open with Microsoft Edge chosen as the default browser.
+export const linkRoutingOpen = defineFixture({
+  width: SETTINGS_ROW_WIDTH,
+  render: () => (
+    <div style={{ paddingTop: 110, paddingBottom: 60 }}>
+      <BrowserLinkRoutingSetting
+        settings={{
+          ...getDefaultSettings('/home/fixture'),
+          externalBrowserId: 'com.microsoft.edgemac'
+        }}
+        installedBrowsers={[
+          { id: 'com.google.Chrome', name: 'Google Chrome' },
+          { id: 'com.microsoft.edgemac', name: 'Microsoft Edge' },
+          { id: 'com.apple.Safari', name: 'Safari' }
+        ]}
+        linkRoutingDescription={getBrowserLinkRoutingDescription({ isMac: true })}
+        isMac
+        updateSettings={() => {}}
+      />
+    </div>
+  ),
+  interact: (frame) => {
+    const trigger = frame.querySelector<HTMLElement>('[data-slot="select-trigger"]')
+    trigger?.focus()
+    trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+  }
+})
