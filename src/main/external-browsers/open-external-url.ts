@@ -13,6 +13,10 @@ export function setExternalBrowserSettingsReader(
   readSettings = reader
 }
 
+export function readConfiguredExternalBrowserId(): string | null {
+  return readSettings?.().externalBrowserId ?? null
+}
+
 function parseHttpUrl(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl)
@@ -32,7 +36,7 @@ export async function openExternalUrl(
     return
   }
   // Read at call time so a settings change applies to the next open.
-  const browserId = options.browserId ?? readSettings?.().externalBrowserId ?? null
+  const browserId = options.browserId ?? readConfiguredExternalBrowserId()
   if (browserId && browserId !== SYSTEM_DEFAULT_BROWSER_ID) {
     if (await openUrlInInstalledBrowser(browserId, url)) {
       return

@@ -295,6 +295,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
     setRichMarkdownContextMenuTarget: () => {},
+    setRichMarkdownContextMenuLinkTarget: () => {},
     markPlainTextContextMenuTarget: () => {},
     setTerminalInputFocused: () => {},
     setFloatingFocus: () => {},

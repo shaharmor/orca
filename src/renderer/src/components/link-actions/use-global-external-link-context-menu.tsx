@@ -1,0 +1,156 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { useAppStore } from '@/store'
+import { ExternalLinkMenuItems } from './ExternalLinkMenuItems'
+import type { ExternalLinkMenuTarget } from './external-link-menu-model'
+
+/** Marks a PR/issue control that opens a URL from onClick so right-click offers the link menu. */
+const EXTERNAL_URL_ATTRIBUTE = 'data-orca-external-url'
+
+type GlobalExternalLinkMenu = {
+  target: ExternalLinkMenuTarget
+  point: { x: number; y: number }
+}
+
+function eventElement(target: EventTarget | null): Element | null {
+  if (target instanceof Element) {
+    return target
+  }
+  return target instanceof Node ? target.parentElement : null
+}
+
+function readHttpUrl(raw: string | null | undefined): string | null {
+  if (!raw) {
+    return null
+  }
+  try {
+    // No base URL: relative hrefs must not resolve against the app origin.
+    const parsed = new URL(raw)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null
+  } catch {
+    return null
+  }
+}
+
+function isInsideEditable(element: Element): boolean {
+  return (
+    element.closest('input, textarea, [contenteditable]:not([contenteditable="false"])') !== null
+  )
+}
+
+/** Opens the shared link menu for right-clicked http(s) anchors and marked PR/issue controls. */
+function useGlobalExternalLinkContextMenu(): {
+  menu: GlobalExternalLinkMenu | null
+  openedAtRef: React.RefObject<number>
+  close: () => void
+} {
+  const [menu, setMenu] = useState<GlobalExternalLinkMenu | null>(null)
+  const openedAtRef = useRef(0)
+  const close = useCallback(() => setMenu(null), [])
+
+  useEffect(() => {
+    const open = (event: MouseEvent, url: string): void => {
+      event.preventDefault()
+      window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+      openedAtRef.current = Date.now()
+      setMenu({
+        target: {
+          url,
+          worktreeId: useAppStore.getState().activeWorktreeId,
+          sourceOwner: { kind: 'local' },
+          canOpenOwnedBrowser: false
+        },
+        point: { x: event.clientX, y: event.clientY }
+      })
+    }
+    const linkTargetElement = (event: MouseEvent): Element | null => {
+      if (event.defaultPrevented) {
+        return null
+      }
+      const element = eventElement(event.target)
+      return element && !isInsideEditable(element) ? element : null
+    }
+    // Capture so a marked control beats its row or card menu, e.g. the worktree card.
+    const onMarkedControlContextMenu = (event: MouseEvent): void => {
+      const marked = linkTargetElement(event)?.closest(`[${EXTERNAL_URL_ATTRIBUTE}]`)
+      const url = readHttpUrl(marked?.getAttribute(EXTERNAL_URL_ATTRIBUTE))
+      if (url) {
+        event.stopPropagation()
+        open(event, url)
+      }
+    }
+    // Bubble so surfaces with their own link menu (terminal, chat) handle anchors first.
+    const onAnchorContextMenu = (event: MouseEvent): void => {
+      const anchor = linkTargetElement(event)?.closest('a[href]')
+      const url = readHttpUrl(anchor?.getAttribute('href'))
+      if (url) {
+        open(event, url)
+      }
+    }
+    window.addEventListener('contextmenu', onMarkedControlContextMenu, true)
+    window.addEventListener('contextmenu', onAnchorContextMenu)
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
+    return () => {
+      window.removeEventListener('contextmenu', onMarkedControlContextMenu, true)
+      window.removeEventListener('contextmenu', onAnchorContextMenu)
+      window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
+    }
+  }, [close])
+
+  return { menu, openedAtRef, close }
+}
+
+/** Mounted once at the app root. */
+export function GlobalExternalLinkContextMenu(): React.JSX.Element | null {
+  const { menu, openedAtRef, close } = useGlobalExternalLinkContextMenu()
+  if (!menu) {
+    return null
+  }
+  return (
+    <ExternalLinkContextMenu
+      // Remount per right-click so the menu anchors at the new pointer.
+      key={`${menu.point.x}:${menu.point.y}:${menu.target.url}`}
+      menu={menu}
+      onOpenChange={(open) => {
+        // The opening right-click can land as an outside press on some platforms.
+        if (!open && Date.now() - openedAtRef.current >= 100) {
+          close()
+        }
+      }}
+    />
+  )
+}
+
+function ExternalLinkContextMenu({
+  menu,
+  onOpenChange
+}: {
+  menu: GlobalExternalLinkMenu
+  onOpenChange: (open: boolean) => void
+}): React.JSX.Element {
+  return (
+    <DropdownMenu open onOpenChange={onOpenChange} modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-hidden
+          tabIndex={-1}
+          className="pointer-events-none fixed size-px opacity-0"
+          style={{ left: menu.point.x, top: menu.point.y }}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="min-w-52"
+        sideOffset={0}
+        align="start"
+        onCloseAutoFocus={(event) => event.preventDefault()}
+      >
+        <ExternalLinkMenuItems target={menu.target} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}

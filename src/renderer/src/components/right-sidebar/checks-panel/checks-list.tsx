@@ -167,6 +167,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                               variant="ghost"
                               size="icon-xs"
                               className="size-6 text-muted-foreground hover:text-foreground focus-visible:text-foreground"
+                              data-orca-external-url={openUrl}
                               aria-label={translate(
                                 'auto.components.right.sidebar.checks.panel.content.0dca6bfab5',
                                 'Open check details'
