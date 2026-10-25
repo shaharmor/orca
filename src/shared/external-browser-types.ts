@@ -3,3 +3,6 @@ export type InstalledBrowser = {
   id: string
   name: string
 }
+
+/** Reserved browser id that forces the OS default browser regardless of settings. */
+export const SYSTEM_DEFAULT_BROWSER_ID = 'system-default'
