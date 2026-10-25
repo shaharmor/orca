@@ -59,12 +59,33 @@ function TerminalContextMenuOnLink(): React.JSX.Element {
         onCopyPaneId={noop}
         canCopyAgentSessionId={false}
         onCopyAgentSessionId={noop}
+        linkTarget={{
+          url: 'https://github.com/stablyai/orca/pull/1234',
+          worktreeId: 'fixture-worktree',
+          sourceOwner: { kind: 'local' },
+          canOpenOwnedBrowser: false
+        }}
       />
     </div>
   )
 }
 
 export const linkMenu = defineFixture({
-  width: 420,
-  render: () => <TerminalContextMenuOnLink />
+  width: 620,
+  store: {
+    installedBrowsers: [
+      { id: 'com.google.Chrome', name: 'Google Chrome' },
+      { id: 'com.microsoft.edgemac', name: 'Microsoft Edge' },
+      { id: 'com.apple.Safari', name: 'Safari' }
+    ]
+  },
+  render: () => <TerminalContextMenuOnLink />,
+  // Expand "Open in" so the installed browsers are captured.
+  interact: () => {
+    const openIn = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-sub-trigger"]')
+    ).find((trigger) => trigger.textContent === 'Open in')
+    openIn?.focus()
+    openIn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+  }
 })

@@ -20229,6 +20229,11 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "linkActions": {
+      "openInBrowser": "Open in {{browser}}",
+      "openInSubmenu": "Open in",
+      "copyLink": "Copy Link"
     }
   },
   "dashboardPopout": {

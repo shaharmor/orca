@@ -25,6 +25,8 @@ export type OpenHttpLinkOptions = {
   allowRemoteInApp?: boolean
   /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
+  /** Installed browser for the external open; absent uses the configured external default. */
+  browserId?: string
   /** Unconditional for local sources: open inside Orca regardless of settings. */
   forceInApp?: boolean
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
@@ -198,13 +200,15 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
   }
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
+  const openExternally = (externalUrl: string): Promise<void> =>
+    opts.browserId
+      ? window.api.shell.openUrl(externalUrl, opts.browserId)
+      : window.api.shell.openUrl(externalUrl)
   if (!localhostRoute) {
-    void window.api.shell.openUrl(url)
+    void openExternally(url)
     return
   }
-  void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-    void window.api.shell.openUrl(labeledUrl)
-  })
+  void openLabeledLocalhostLink(url, localhostRoute, openExternally)
 }
 
 function localhostLabelRouteForHttpLink(
