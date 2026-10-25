@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { isMac } from '@/app-shell/app-window-chrome'
 import { translate } from '@/i18n/i18n'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
+import { httpLinkDestinationLabel } from '@/lib/http-link-destinations'
 import {
   buildSearchUrl,
   DEFAULT_SEARCH_ENGINE,
@@ -11,6 +12,7 @@ import {
   SEARCH_ENGINE_LABELS,
   type SearchEngine
 } from '../../../../../shared/browser-url'
+import type { InstalledBrowser } from '../../../../../shared/external-browser-types'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
 
 // Programmatic menu focus represents keyboard navigation, so use focus rather than focus-visible.
@@ -20,6 +22,48 @@ const MENU_ITEM_CLASS =
 const SEARCH_LABEL_MAX_CHARS = 32
 
 type MenuItem = { label: string; disabled?: boolean; run: () => void }
+
+type ExternalBrowserLinkRow = {
+  /** 'system' or the installed browser's id. */
+  id: string
+  label: string
+  open: () => void
+}
+
+/** The external-default row, then one row per installed browser, as Chromium lists them. */
+export function buildExternalBrowserLinkRows(
+  linkUrl: string,
+  installedBrowsers: readonly InstalledBrowser[] | null
+): ExternalBrowserLinkRow[] {
+  const open = (browserId?: string): void => {
+    const targetUrl = normalizeExternalBrowserUrl(linkUrl)
+    if (targetUrl) {
+      void (browserId
+        ? window.api.shell.openUrl(targetUrl, browserId)
+        : window.api.shell.openUrl(targetUrl))
+    }
+  }
+  const label = (browser: string): string =>
+    translate(
+      'auto.components.browser.pane.BrowserPane.openLinkInBrowser',
+      'Open Link In {{browser}}',
+      { browser }
+    )
+  return [
+    { id: 'system', label: label(httpLinkDestinationLabel('system')), open: () => open() },
+    ...(installedBrowsers ?? []).map((browser) => ({
+      id: browser.id,
+      label: label(browser.name),
+      open: () => open(browser.id)
+    }))
+  ]
+}
+
+/** Subscribes to what the external browser rows read so they relabel when it changes. */
+export function useExternalBrowserLinkRowsSource(): InstalledBrowser[] | null {
+  useAppStore((state) => state.settings?.externalBrowserId)
+  return useAppStore((state) => state.installedBrowsers)
+}
 
 type EditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'pasteAndMatchStyle' | 'selectAll'
 
@@ -51,8 +95,12 @@ function buildMenuSections({
   webviewRef,
   onReload,
   onClose,
-  searchEngine
-}: BrowserPageContextMenuItemsProps & { searchEngine: SearchEngine }): MenuItem[][] {
+  searchEngine,
+  installedBrowsers
+}: BrowserPageContextMenuItemsProps & {
+  searchEngine: SearchEngine
+  installedBrowsers: InstalledBrowser[] | null
+}): MenuItem[][] {
   const { editable, image, linkUrl, pageUrl, pagePoint } = menu
   const selectionText = menu.selectionText.trim() ? menu.selectionText : ''
 
@@ -158,12 +206,8 @@ function buildMenuSections({
         ),
         () => openInNewTab(linkUrl, false)
       ),
-      item(
-        translate(
-          'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
-          'Open Link In Default Browser'
-        ),
-        () => openExternally(linkUrl)
+      ...buildExternalBrowserLinkRows(linkUrl, installedBrowsers).map((row) =>
+        item(row.label, row.open)
       ),
       item(
         translate('auto.components.browser.pane.BrowserPane.efb0e8f7f3', 'Copy Link Address'),
@@ -277,7 +321,8 @@ export function BrowserPageContextMenuItems(
   props: BrowserPageContextMenuItemsProps
 ): React.JSX.Element {
   const searchEngine = useAppStore((s) => s.browserDefaultSearchEngine) ?? DEFAULT_SEARCH_ENGINE
-  const sections = buildMenuSections({ ...props, searchEngine })
+  const installedBrowsers = useExternalBrowserLinkRowsSource()
+  const sections = buildMenuSections({ ...props, searchEngine, installedBrowsers })
   return (
     <>
       {sections.map((section, sectionIndex) => (

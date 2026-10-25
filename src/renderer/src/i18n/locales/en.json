@@ -17294,7 +17294,8 @@
             "copyImage": "Copy Image",
             "copyImageAddress": "Copy Image Address",
             "searchSelection": "Search {{value0}} for “{{value1}}”",
-            "inspect": "Inspect"
+            "inspect": "Inspect",
+            "openLinkInBrowser": "Open Link In {{browser}}"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",

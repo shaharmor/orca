@@ -50,6 +50,11 @@ function NativeChatLinkContextMenu(): React.JSX.Element {
             target={linkTarget}
             composerRef={composerRef}
             rewind={undefined}
+            linkContext={{
+              worktreeId: 'fixture-worktree',
+              worktreePath: '/repo',
+              runtimeEnvironmentId: null
+            }}
           />
           <DropdownMenuSeparator />
           <NativeChatFindMenuItem onSelect={() => {}} />
@@ -61,5 +66,20 @@ function NativeChatLinkContextMenu(): React.JSX.Element {
 
 export const linkMenu = defineFixture({
   width: 420,
-  render: () => <NativeChatLinkContextMenu />
+  store: {
+    installedBrowsers: [
+      { id: 'com.google.Chrome', name: 'Google Chrome' },
+      { id: 'com.microsoft.edgemac', name: 'Microsoft Edge' },
+      { id: 'com.apple.Safari', name: 'Safari' }
+    ]
+  },
+  render: () => <NativeChatLinkContextMenu />,
+  // Expand "Open in" so the installed browsers are captured.
+  interact: () => {
+    const openIn = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-sub-trigger"]')
+    ).find((trigger) => trigger.textContent === 'Open in')
+    openIn?.focus()
+    openIn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+  }
 })

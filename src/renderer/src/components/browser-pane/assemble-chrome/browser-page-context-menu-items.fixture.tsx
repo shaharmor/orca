@@ -36,5 +36,12 @@ function BrowserPageLinkContextMenu(): React.JSX.Element {
 
 export const linkMenu = defineFixture({
   width: 320,
+  store: {
+    installedBrowsers: [
+      { id: 'com.google.Chrome', name: 'Google Chrome' },
+      { id: 'com.microsoft.edgemac', name: 'Microsoft Edge' },
+      { id: 'com.apple.Safari', name: 'Safari' }
+    ]
+  },
   render: () => <BrowserPageLinkContextMenu />
 })

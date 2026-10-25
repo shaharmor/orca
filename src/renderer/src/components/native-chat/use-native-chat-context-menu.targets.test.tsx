@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HttpLinkDestinations from '@/lib/http-link-destinations'
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
 import { createNativeChatFileHref } from '../../../../shared/native-chat-href-routing'
+import { useAppStore } from '@/store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import {
@@ -20,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   openDetectedFilePath: vi.fn(),
   writeClipboardText: vi.fn(),
   confirm: vi.fn(),
-  appendText: vi.fn()
+  appendText: vi.fn(),
+  openUrl: vi.fn()
 }))
 
 vi.mock('@/lib/http-link-destinations', async (importOriginal) => ({
@@ -96,8 +98,18 @@ async function rightClick(text: string): Promise<void> {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('api', { ui: { writeClipboardText: mocks.writeClipboardText } })
+  vi.stubGlobal('api', {
+    ui: { writeClipboardText: mocks.writeClipboardText },
+    shell: { openUrl: mocks.openUrl }
+  })
   mocks.writeClipboardText.mockResolvedValue(undefined)
+  mocks.openUrl.mockResolvedValue(undefined)
+  useAppStore.setState({
+    installedBrowsers: [
+      { id: 'chrome', name: 'Google Chrome' },
+      { id: 'edge', name: 'Microsoft Edge' }
+    ]
+  })
 })
 
 afterEach(() => {
@@ -116,7 +128,12 @@ describe('native chat right-click targets', () => {
     expect(mocks.writeClipboardText).toHaveBeenCalledWith('https://example.com/docs')
 
     await rightClick('docs link')
-    expect(menuItemNames().slice(0, 3)).toEqual(['System Browser', 'Orca Browser', 'Copy link'])
+    expect(menuItemNames().slice(0, 4)).toEqual([
+      'System Browser',
+      'Orca Browser',
+      'Open in',
+      'Copy link'
+    ])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Orca Browser' }))
     expect(mocks.openRoutedHttpLink).toHaveBeenCalledWith('https://example.com/docs', {
       worktreeId: 'wt-1',
@@ -124,6 +141,22 @@ describe('native chat right-click targets', () => {
       modifierHeld: false,
       forceDestination: 'orca'
     })
+  })
+
+  it('opens a web link in the browser picked from "Open in"', async () => {
+    render(<Chat onFind={vi.fn()} />)
+    await rightClick('docs link')
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open in' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Google Chrome' }))
+    expect(mocks.openUrl).toHaveBeenCalledWith('https://example.com/docs', 'chrome')
+  })
+
+  it('offers no "Open in" submenu for a file link', async () => {
+    render(<Chat onFind={vi.fn()} />)
+    await rightClick('app file')
+
+    expect(menuItemNames()).not.toContain('Open in')
   })
 
   it('opens and copies a file link at the path the chat resolves it to', async () => {
