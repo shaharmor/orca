@@ -10163,6 +10163,11 @@
               "native": "native",
               "cleaned": "cleaned",
               "restart": "restart"
+            },
+            "linkRouting": {
+              "defaultBrowser": "default browser",
+              "firefox": "firefox",
+              "safari": "safari"
             }
           },
           "use": {
@@ -12220,13 +12225,20 @@
         },
         "BrowserLinkRoutingSetting": {
           "description": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
-          "descriptionBase": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
+          "descriptionBase": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor.",
+          "descriptionNamedBrowser": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses {{browser}}.",
+          "loadingBrowsers": "Loading browsers…",
+          "systemDefaultBrowser": "System default browser",
+          "unavailableBrowser": "Unavailable browser (using system default)"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
           "titleOrca": "Hold Shift to open in Orca",
           "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
-          "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
+          "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead.",
+          "titleNamedBrowser": "Hold Shift to open in {{browser}}",
+          "descriptionNamedBrowserFromOrca": "Links open in Orca, so {{chord}}+click sends one to {{browser}} instead.",
+          "descriptionOrcaFromNamedBrowser": "Links open in {{browser}}. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
         "BrowserLinkRoutingBackgroundSetting": {
           "title": "Open links in the background",

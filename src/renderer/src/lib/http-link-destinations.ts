@@ -1,5 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { useAppStore } from '@/store'
+import { resolveInstalledBrowserName } from '@/store/slices/installed-browsers'
 
 // Keep original terminal catalog keys: their shipped translations are now shared with native chat.
 
@@ -48,16 +50,26 @@ export function httpLinkDirectClickDestination(
   return shiftKey ? (destinations.alternate ?? destinations.primary) : destinations.primary
 }
 
+/** The configured external browser's name, or null when links use the OS default. */
+function configuredExternalBrowserName(): string | null {
+  const state = useAppStore.getState()
+  return resolveInstalledBrowserName(state.settings?.externalBrowserId, state.installedBrowsers)
+}
+
 export function httpLinkDestinationLabel(destination: HttpLinkDestination): string {
-  return destination === 'orca'
-    ? translate(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
-        'Orca Browser'
-      )
-    : translate(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser',
-        'System Browser'
-      )
+  if (destination === 'orca') {
+    return translate(
+      'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
+      'Orca Browser'
+    )
+  }
+  return (
+    configuredExternalBrowserName() ??
+    translate(
+      'auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser',
+      'System Browser'
+    )
+  )
 }
 
 export function buildHttpLinkActions(

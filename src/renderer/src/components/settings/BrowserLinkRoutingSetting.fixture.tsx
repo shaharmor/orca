@@ -10,6 +10,10 @@ export const linkRouting = defineFixture({
   render: () => (
     <BrowserLinkRoutingSetting
       settings={getDefaultSettings('/home/fixture')}
+      installedBrowsers={[
+        { id: 'com.google.Chrome', name: 'Google Chrome' },
+        { id: 'com.microsoft.edgemac', name: 'Microsoft Edge' }
+      ]}
       linkRoutingDescription={getBrowserLinkRoutingDescription({ isMac: true })}
       isMac
       updateSettings={() => {}}
