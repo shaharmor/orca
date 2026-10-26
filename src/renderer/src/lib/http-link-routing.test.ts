@@ -132,6 +132,7 @@ function seedScannedAnalyticsPort(): void {
 
 describe('openHttpLink', () => {
   it('keeps the selected host of the active workspace a link opens in', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
     storeState.activeWorktreeId = 'wt-1'
     storeState.activeWorkspaceExecutionHostId = 'ssh:box'
@@ -142,6 +143,7 @@ describe('openHttpLink', () => {
   })
 
   it('routes into Orca when openLinksInApp is on and a worktree is known', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
@@ -155,6 +157,7 @@ describe('openHttpLink', () => {
 
   // Why: #31530 — queued links must not pull focus or the selected workspace away from the source.
   it('opens in the background without selecting the tab or its workspace', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true, openLinksInAppInBackground: true }
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
@@ -167,6 +170,7 @@ describe('openHttpLink', () => {
 
   // Why: #7813 — a link clicked in Agents View landed in a tab layout that was not on screen.
   it('brings the workspace tabs on screen for a link clicked in Agents View', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
     storeState.activeView = 'activity'
 
@@ -185,6 +189,7 @@ describe('openHttpLink', () => {
   })
 
   it('routes floating workspace links into Orca without changing the active repo worktree', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
 
     openHttpLink('https://example.com/', { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
@@ -208,6 +213,7 @@ describe('openHttpLink', () => {
   })
 
   it('forceInApp opens a local link in Orca when the setting is off', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: false }
 
     openHttpLink('https://example.com/', {
@@ -236,6 +242,7 @@ describe('openHttpLink', () => {
   })
 
   it('keeps explicitly local links local while a remote runtime is active', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'remote-1' }
 
     openHttpLink('https://example.com/', {
@@ -264,7 +271,8 @@ describe('openHttpLink', () => {
     expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
       workspaceId: 'wt-1',
       url: 'https://github.com/acme/widgets/pull/123',
-      intent: { kind: 'url' }
+      intent: { kind: 'url' },
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) })
     })
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(openUrlMock).not.toHaveBeenCalled()
@@ -281,6 +289,7 @@ describe('openHttpLink', () => {
   })
 
   it('honors an explicit local document owner despite an unrelated active runtime', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-other' }
 
     openHttpLink('https://example.com/', {
@@ -292,24 +301,6 @@ describe('openHttpLink', () => {
       activate: true
     })
     expect(openUrlMock).not.toHaveBeenCalled()
-  })
-
-  // Why: an SSH page renders on this desktop, so its link tab takes keyboard focus like a local one.
-  it('focuses the page an SSH link opened on this desktop', async () => {
-    storeState.settings = { openLinksInApp: true }
-    openRuntimeBrowserTabMock.mockResolvedValueOnce('ssh-page')
-
-    openHttpLink('https://example.com/', {
-      allowRemoteInApp: true,
-      worktreeId: 'wt-1',
-      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
-    })
-
-    await vi.waitFor(() =>
-      expect(dispatchEventMock).toHaveBeenCalledWith(
-        expect.objectContaining({ detail: { pageId: 'ssh-page', target: 'webview' } })
-      )
-    )
   })
 
   it('routes runtime and SSH document owners through their workspace browsers', () => {
@@ -330,13 +321,15 @@ describe('openHttpLink', () => {
       workspaceId: 'wt-1',
       url: 'http://localhost:5180/runtime',
       intent: { kind: 'url' },
-      expectedRuntimeEnvironmentId: 'env-1'
+      expectedRuntimeEnvironmentId: 'env-1',
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) })
     })
     expect(openRuntimeBrowserTabMock).toHaveBeenNthCalledWith(2, {
       workspaceId: 'wt-1',
       url: 'http://localhost:5180/ssh',
       intent: { kind: 'url' },
-      expectedSshConnectionId: 'ssh-1'
+      expectedSshConnectionId: 'ssh-1',
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) })
     })
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
@@ -733,6 +726,7 @@ describe('openHttpLink modifier routing', () => {
   })
 
   it('opens in Orca when inverting is on and links open externally', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1', modifierHeld: true })

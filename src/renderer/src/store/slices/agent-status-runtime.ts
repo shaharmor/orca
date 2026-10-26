@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { AgentStatusBatchTransaction, AgentStatusBatchUpdate } from './agent-status-contract'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
+import type {
+  AgentStatusBatchTransaction,
+  AgentStatusBatchUpdate
+} from './agent-status/agent-status-contract'
+import type { AgentStatusSlice } from './agent-status/agent-status-slice-contract'
 import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
@@ -184,6 +187,7 @@ export function createAgentStatusRuntime(
     }
   })
 
+  // Why: launch configs retire with the pane; a woken pane registers its config before consuming this record.
   const clearSleepingAgentSessionsByPaneKey = (paneKeys: readonly string[]): void => {
     if (paneKeys.length === 0) {
       return
@@ -191,7 +195,6 @@ export function createAgentStatusRuntime(
     const uniquePaneKeys = new Set(paneKeys)
     set((s) => {
       let nextSleeping = s.sleepingAgentSessionsByPaneKey
-      let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
       for (const paneKey of uniquePaneKeys) {
         if (paneKey in nextSleeping) {
           if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
@@ -199,23 +202,11 @@ export function createAgentStatusRuntime(
           }
           delete nextSleeping[paneKey]
         }
-        if (paneKey in nextLaunchConfigs) {
-          if (nextLaunchConfigs === s.agentLaunchConfigByPaneKey) {
-            nextLaunchConfigs = { ...nextLaunchConfigs }
-          }
-          delete nextLaunchConfigs[paneKey]
-        }
       }
-      if (
-        nextSleeping === s.sleepingAgentSessionsByPaneKey &&
-        nextLaunchConfigs === s.agentLaunchConfigByPaneKey
-      ) {
+      if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
         return s
       }
-      return {
-        sleepingAgentSessionsByPaneKey: nextSleeping,
-        agentLaunchConfigByPaneKey: nextLaunchConfigs
-      }
+      return { sleepingAgentSessionsByPaneKey: nextSleeping }
     })
   }
 
