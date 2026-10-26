@@ -73,6 +73,7 @@ describe('installed browser catalog', () => {
     vi.setSystemTime(60_000)
     readBrowsers.mockResolvedValueOnce([detected('chrome'), detected('safari')])
     expect((await catalog.findInstalledBrowser('safari'))?.id).toBe('safari')
+    expect(await catalog.findInstalledBrowser('firefox')).toBeUndefined()
     expect(readBrowsers).toHaveBeenCalledTimes(2)
   })
 })
