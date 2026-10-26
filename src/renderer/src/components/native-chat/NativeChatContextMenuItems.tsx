@@ -94,6 +94,10 @@ function NativeChatLinkOpenInSubmenu({
 }): React.JSX.Element | null {
   const installedBrowsers = useAppStore((state) => state.installedBrowsers)
   const sourceOwner = resolveNativeChatHttpLinkSourceOwner(useAppStore.getState(), worktreeId)
+  // Routing refuses an unknown owner, so its browser rows would do nothing.
+  if (sourceOwner.kind === 'unknown') {
+    return null
+  }
   // Orca's row comes from the click popover's actions, so whether it could open is moot here.
   const model = buildExternalLinkMenuModel(
     { url, worktreeId, sourceOwner, canOpenOwnedBrowser: false },
