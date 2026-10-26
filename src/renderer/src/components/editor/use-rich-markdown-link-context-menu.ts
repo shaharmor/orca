@@ -1,23 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { openRoutedHttpLink } from '@/lib/http-link-destinations'
+import { parseHttpUrl } from '../../../../shared/external-browser-types'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import {
   resolveRichMarkdownOrcaLinkTarget,
   type RichMarkdownOrcaLinkTarget
 } from './rich-markdown-editor-click-routing'
-
-function readHttpHref(anchor: Element | null): string | null {
-  const href = anchor?.getAttribute('href')
-  if (!href) {
-    return null
-  }
-  try {
-    const parsed = new URL(href)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null
-  } catch {
-    return null
-  }
-}
 
 /** Tells main's native menu whether a right-clicked link can open in Orca Browser, and opens it there. */
 export function useRichMarkdownLinkContextMenu(
@@ -33,7 +21,8 @@ export function useRichMarkdownLinkContextMenu(
     const editorDom = editor.view.dom
     const captureTarget = (event: MouseEvent): void => {
       const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
-      const url = anchor && editorDom.contains(anchor) ? readHttpHref(anchor) : null
+      const url =
+        anchor && editorDom.contains(anchor) ? parseHttpUrl(anchor.getAttribute('href')) : null
       const target = resolveRichMarkdownOrcaLinkTarget(url, event, linkContext.getSnapshot())
       capturedTargetRef.current = target
       window.api.ui.setRichMarkdownContextMenuLinkTarget(

@@ -12,11 +12,18 @@ import {
   type ExternalLinkMenuDestination,
   type ExternalLinkMenuTarget
 } from './external-link-menu-model'
+import type { InstalledBrowser } from '../../../../shared/external-browser-types'
 
 function openInLabel(destination: ExternalLinkMenuDestination): string {
   return translate('components.linkActions.openInBrowser', 'Open in {{browser}}', {
     browser: destination.name
   })
+}
+
+/** Also subscribes to the configured browser so the external-default row relabels when it changes. */
+export function useLinkMenuInstalledBrowsers(): InstalledBrowser[] | null {
+  useAppStore((state) => state.settings?.externalBrowserId)
+  return useAppStore((state) => state.installedBrowsers)
 }
 
 /** The shared right-click link section for DropdownMenu-based surfaces. */
@@ -25,9 +32,7 @@ export function ExternalLinkMenuItems({
 }: {
   target: ExternalLinkMenuTarget
 }): React.JSX.Element {
-  const installedBrowsers = useAppStore((state) => state.installedBrowsers)
-  // Subscribed so the external row relabels when the configured browser changes.
-  useAppStore((state) => state.settings?.externalBrowserId)
+  const installedBrowsers = useLinkMenuInstalledBrowsers()
   const model = buildExternalLinkMenuModel(target, installedBrowsers)
   return (
     <>

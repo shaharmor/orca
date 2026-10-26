@@ -17,10 +17,8 @@ import {
   type RemoteBrowserRuntimeTarget
 } from './remote-browser-page-input-model'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import {
-  buildExternalBrowserLinkRows,
-  useExternalBrowserLinkRowsSource
-} from '../assemble-chrome/browser-page-context-menu-items'
+import { buildExternalBrowserLinkRows } from '../assemble-chrome/browser-page-context-menu-items'
+import { useLinkMenuInstalledBrowsers } from '@/components/link-actions/ExternalLinkMenuItems'
 
 export function useRemoteBrowserPageContextMenu({
   busy,
@@ -151,7 +149,7 @@ export function RemoteBrowserPageContextMenu({
   onNavigate: (method: 'browser.back' | 'browser.forward' | 'browser.reload') => void
 }): React.JSX.Element {
   const contextMenuRef = useRef<HTMLDivElement>(null)
-  const installedBrowsers = useExternalBrowserLinkRowsSource()
+  const installedBrowsers = useLinkMenuInstalledBrowsers()
 
   useLayoutEffect(() => {
     const el = contextMenuRef.current

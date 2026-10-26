@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
-import { resolveInstalledBrowserName } from '../../store/slices/installed-browsers'
+import { resolveInstalledBrowserName } from '../../../../shared/external-browser-types'
 import { matchesSettingsSearch } from './settings-search'
 import { getBrowserPaneSearchEntries } from './browser-search'
 import { getBrowserLinkRoutingDescription } from './browser-link-routing-copy'

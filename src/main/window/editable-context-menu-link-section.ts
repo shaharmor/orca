@@ -19,17 +19,6 @@ export type EditableContextMenuLinkActions = {
   copyText: (text: string) => void
 }
 
-export function readHttpLinkUrl(
-  params: Pick<Electron.ContextMenuParams, 'linkURL'>
-): string | null {
-  try {
-    const parsed = new URL(params.linkURL)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null
-  } catch {
-    return null
-  }
-}
-
 // zod numbers reject NaN and Infinity.
 const linkTargetSchema = z.object({ x: z.number(), y: z.number() })
 

@@ -13,7 +13,7 @@ const DESKTOP_STRING_ESCAPES: Record<string, string> = {
   '\\': '\\'
 }
 
-export type DesktopEntryFile = { id: string; text: string }
+type DesktopEntryFile = { id: string; text: string }
 
 function unescapeDesktopString(value: string): string {
   return value.replace(/\\(.)/g, (match, char: string) => DESKTOP_STRING_ESCAPES[char] ?? match)

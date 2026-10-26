@@ -10,9 +10,9 @@ import {
 } from '../external-browsers/open-external-url'
 import {
   parseRichMarkdownContextMenuLinkTarget,
-  readHttpLinkUrl,
   type EditableContextMenuLinkActions
 } from './editable-context-menu-link-section'
+import { parseHttpUrl, resolveInstalledBrowserName } from '../../shared/external-browser-types'
 
 export type RichMarkdownLinkContextMenu = {
   /** Opens now, or once the browser catalog loads when the menu is for an editable http(s) link. */
@@ -40,17 +40,18 @@ export function installRichMarkdownLinkContextMenu(
   const withLinkActions: RichMarkdownLinkContextMenu['withLinkActions'] = (params, open) => {
     const canOpenInOrca = pendingTarget?.x === params.x && pendingTarget?.y === params.y
     pendingTarget = null
-    if (!params.isEditable || !readHttpLinkUrl(params)) {
+    if (!params.isEditable || !parseHttpUrl(params.linkURL)) {
       open()
       return
     }
     void listInstalledBrowsers().then((browsers) => {
-      const configuredBrowserId = readConfiguredExternalBrowserId()
       open({
         canOpenInOrca,
         browsers,
-        externalDefaultName:
-          browsers.find((browser) => browser.id === configuredBrowserId)?.name ?? null,
+        externalDefaultName: resolveInstalledBrowserName(
+          readConfiguredExternalBrowserId(),
+          browsers
+        ),
         openUrl: (url, browserId) => void openExternalUrl(url, { browserId }),
         copyText: (text) => clipboard.writeText(text)
       })

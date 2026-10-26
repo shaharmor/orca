@@ -26,13 +26,3 @@ export const createInstalledBrowsersSlice: StateCreator<
     }
   }
 })
-
-export function resolveInstalledBrowserName(
-  browserId: string | null | undefined,
-  installedBrowsers: readonly InstalledBrowser[] | null
-): string | null {
-  if (!browserId) {
-    return null
-  }
-  return installedBrowsers?.find((browser) => browser.id === browserId)?.name ?? null
-}

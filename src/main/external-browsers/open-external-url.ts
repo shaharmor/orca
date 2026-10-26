@@ -1,6 +1,6 @@
 import { shell } from 'electron'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { SYSTEM_DEFAULT_BROWSER_ID } from '../../shared/external-browser-types'
+import { parseHttpUrl, SYSTEM_DEFAULT_BROWSER_ID } from '../../shared/external-browser-types'
 import { openUrlInInstalledBrowser } from './external-browser-launch'
 
 type ExternalBrowserSettingsReader = () => Pick<GlobalSettings, 'externalBrowserId'>
@@ -15,15 +15,6 @@ export function setExternalBrowserSettingsReader(
 
 export function readConfiguredExternalBrowserId(): string | null {
   return readSettings?.().externalBrowserId ?? null
-}
-
-function parseHttpUrl(rawUrl: string): string | null {
-  try {
-    const parsed = new URL(rawUrl)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null
-  } catch {
-    return null
-  }
 }
 
 /** Opens http(s) URLs in the explicit browser, else the configured default, else the OS default. */

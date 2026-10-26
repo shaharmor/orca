@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { useAppStore } from '@/store'
-import { resolveInstalledBrowserName } from '@/store/slices/installed-browsers'
+import { resolveInstalledBrowserName } from '../../../shared/external-browser-types'
 
 // Keep original terminal catalog keys: their shipped translations are now shared with native chat.
 

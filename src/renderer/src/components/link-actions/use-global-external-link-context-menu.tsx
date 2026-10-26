@@ -8,6 +8,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useAppStore } from '@/store'
 import { ExternalLinkMenuItems } from './ExternalLinkMenuItems'
 import type { ExternalLinkMenuTarget } from './external-link-menu-model'
+import { parseHttpUrl } from '../../../../shared/external-browser-types'
 
 /** Marks a PR/issue control that opens a URL from onClick so right-click offers the link menu. */
 const EXTERNAL_URL_ATTRIBUTE = 'data-orca-external-url'
@@ -22,19 +23,6 @@ function eventElement(target: EventTarget | null): Element | null {
     return target
   }
   return target instanceof Node ? target.parentElement : null
-}
-
-function readHttpUrl(raw: string | null | undefined): string | null {
-  if (!raw) {
-    return null
-  }
-  try {
-    // No base URL: relative hrefs must not resolve against the app origin.
-    const parsed = new URL(raw)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null
-  } catch {
-    return null
-  }
 }
 
 function isInsideEditable(element: Element): boolean {
@@ -78,7 +66,7 @@ function useGlobalExternalLinkContextMenu(): {
     // Capture so a marked control beats its row or card menu, e.g. the worktree card.
     const onMarkedControlContextMenu = (event: MouseEvent): void => {
       const marked = linkTargetElement(event)?.closest(`[${EXTERNAL_URL_ATTRIBUTE}]`)
-      const url = readHttpUrl(marked?.getAttribute(EXTERNAL_URL_ATTRIBUTE))
+      const url = parseHttpUrl(marked?.getAttribute(EXTERNAL_URL_ATTRIBUTE))
       if (url) {
         event.stopPropagation()
         open(event, url)
@@ -87,7 +75,7 @@ function useGlobalExternalLinkContextMenu(): {
     // Bubble so surfaces with their own link menu (terminal, chat) handle anchors first.
     const onAnchorContextMenu = (event: MouseEvent): void => {
       const anchor = linkTargetElement(event)?.closest('a[href]')
-      const url = readHttpUrl(anchor?.getAttribute('href'))
+      const url = parseHttpUrl(anchor?.getAttribute('href'))
       if (url) {
         open(event, url)
       }

@@ -7,9 +7,9 @@ import {
 import type { ContextMenuSpelling } from '../../shared/browser-guest-events'
 import {
   buildEditableContextMenuLinkSection,
-  readHttpLinkUrl,
   type EditableContextMenuLinkActions
 } from './editable-context-menu-link-section'
+import { parseHttpUrl } from '../../shared/external-browser-types'
 import { translateMain } from '../i18n/main-i18n'
 
 type EditableContextMenuWebContents = Pick<
@@ -224,7 +224,7 @@ export function buildEditableContextMenuTemplate(
 
   const { suggestions, misspelledWord } = readContextMenuSpelling(params)
   const isRichMarkdownSurface = params.formControlType === 'none' && options?.plainText !== true
-  const linkUrl = isRichMarkdownSurface && options?.link ? readHttpLinkUrl(params) : null
+  const linkUrl = isRichMarkdownSurface && options?.link ? parseHttpUrl(params.linkURL) : null
   const linkTemplate =
     linkUrl && options?.link
       ? buildEditableContextMenuLinkSection(linkUrl, options.link, webContents, {

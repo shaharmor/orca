@@ -32,7 +32,7 @@ function readPlatformBrowsers(): Promise<DetectedBrowser[]> {
   return Promise.resolve([])
 }
 
-export function listDetectedBrowsers(
+function listDetectedBrowsers(
   options: { forceRefresh?: boolean } = {}
 ): Promise<DetectedBrowser[]> {
   const now = Date.now()

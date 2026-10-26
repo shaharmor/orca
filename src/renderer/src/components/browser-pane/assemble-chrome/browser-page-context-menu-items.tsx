@@ -4,6 +4,7 @@ import { isMac } from '@/app-shell/app-window-chrome'
 import { translate } from '@/i18n/i18n'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
 import { httpLinkDestinationLabel } from '@/lib/http-link-destinations'
+import { useLinkMenuInstalledBrowsers } from '@/components/link-actions/ExternalLinkMenuItems'
 import {
   buildSearchUrl,
   DEFAULT_SEARCH_ENGINE,
@@ -30,19 +31,20 @@ type ExternalBrowserLinkRow = {
   open: () => void
 }
 
+function openExternally(url: string, browserId?: string): void {
+  const targetUrl = normalizeExternalBrowserUrl(url)
+  if (targetUrl) {
+    void (browserId
+      ? window.api.shell.openUrl(targetUrl, browserId)
+      : window.api.shell.openUrl(targetUrl))
+  }
+}
+
 /** The external-default row, then one row per installed browser, as Chromium lists them. */
 export function buildExternalBrowserLinkRows(
   linkUrl: string,
   installedBrowsers: readonly InstalledBrowser[] | null
 ): ExternalBrowserLinkRow[] {
-  const open = (browserId?: string): void => {
-    const targetUrl = normalizeExternalBrowserUrl(linkUrl)
-    if (targetUrl) {
-      void (browserId
-        ? window.api.shell.openUrl(targetUrl, browserId)
-        : window.api.shell.openUrl(targetUrl))
-    }
-  }
   const label = (browser: string): string =>
     translate(
       'auto.components.browser.pane.BrowserPane.openLinkInBrowser',
@@ -50,19 +52,17 @@ export function buildExternalBrowserLinkRows(
       { browser }
     )
   return [
-    { id: 'system', label: label(httpLinkDestinationLabel('system')), open: () => open() },
+    {
+      id: 'system',
+      label: label(httpLinkDestinationLabel('system')),
+      open: () => openExternally(linkUrl)
+    },
     ...(installedBrowsers ?? []).map((browser) => ({
       id: browser.id,
       label: label(browser.name),
-      open: () => open(browser.id)
+      open: () => openExternally(linkUrl, browser.id)
     }))
   ]
-}
-
-/** Subscribes to what the external browser rows read so they relabel when it changes. */
-export function useExternalBrowserLinkRowsSource(): InstalledBrowser[] | null {
-  useAppStore((state) => state.settings?.externalBrowserId)
-  return useAppStore((state) => state.installedBrowsers)
 }
 
 type EditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'pasteAndMatchStyle' | 'selectAll'
@@ -123,12 +123,6 @@ function buildMenuSections({
   })
   const openInNewTab = (url: string, activate: boolean): void => {
     openUrlInTabBesideBrowserPage({ sourcePageId: browserPageId, worktreeId, url, activate })
-  }
-  const openExternally = (url: string): void => {
-    const targetUrl = normalizeExternalBrowserUrl(url)
-    if (targetUrl) {
-      void window.api.shell.openUrl(targetUrl)
-    }
   }
 
   const sections: MenuItem[][] = []
@@ -321,7 +315,7 @@ export function BrowserPageContextMenuItems(
   props: BrowserPageContextMenuItemsProps
 ): React.JSX.Element {
   const searchEngine = useAppStore((s) => s.browserDefaultSearchEngine) ?? DEFAULT_SEARCH_ENGINE
-  const installedBrowsers = useExternalBrowserLinkRowsSource()
+  const installedBrowsers = useLinkMenuInstalledBrowsers()
   const sections = buildMenuSections({ ...props, searchEngine, installedBrowsers })
   return (
     <>
