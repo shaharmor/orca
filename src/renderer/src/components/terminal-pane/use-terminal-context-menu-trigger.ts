@@ -106,7 +106,7 @@ export function useTerminalContextMenuTrigger({
     const bounds = boundsElement.getBoundingClientRect()
     const linkUrl = clickedPane
       ? (findHttpLinkAtTerminalPointer(clickedPane.terminal, event.nativeEvent) ??
-        readHoveredTerminalOscHttpLink(clickedPane.terminal))
+        readHoveredTerminalOscHttpLink(clickedPane.terminal, event.nativeEvent))
       : null
     // The pane's owner, so remote panes only offer reachable browsers.
     setLinkTarget(

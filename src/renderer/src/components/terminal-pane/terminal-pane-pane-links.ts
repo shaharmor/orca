@@ -191,8 +191,8 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
         pane.terminal.clearSelection()
       }
     },
-    hover: (_event, text) => {
-      setHoveredTerminalOscLink(pane.terminal, text)
+    hover: (_event, text, range) => {
+      setHoveredTerminalOscLink(pane.terminal, { uri: text, range })
       oscTooltipHoverToken += 1
       const hoverToken = oscTooltipHoverToken
       const hint = getUrlOpenLinkHint(pane.id)
