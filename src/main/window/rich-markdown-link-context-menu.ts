@@ -3,7 +3,7 @@ import {
   richMarkdownContextMenuLinkTargetChannel,
   type RichMarkdownContextMenuLinkTarget
 } from '../../shared/rich-markdown-context-menu'
-import { listInstalledBrowsers } from '../external-browsers/installed-browser-catalog'
+import { readInstalledBrowserSnapshot } from '../external-browsers/installed-browser-catalog'
 import {
   openExternalUrl,
   readConfiguredExternalBrowserId
@@ -15,7 +15,7 @@ import {
 import { parseHttpUrl, resolveInstalledBrowserName } from '../../shared/external-browser-types'
 
 export type RichMarkdownLinkContextMenu = {
-  /** Opens now, or once the browser catalog loads when the menu is for an editable http(s) link. */
+  /** Opens synchronously; the link section lists the last completed browser scan. */
   withLinkActions: (
     params: Pick<Electron.ContextMenuParams, 'x' | 'y' | 'isEditable' | 'linkURL'>,
     open: (link?: EditableContextMenuLinkActions) => void
@@ -44,17 +44,14 @@ export function installRichMarkdownLinkContextMenu(
       open()
       return
     }
-    void listInstalledBrowsers().then((browsers) => {
-      open({
-        canOpenInOrca,
-        browsers,
-        externalDefaultName: resolveInstalledBrowserName(
-          readConfiguredExternalBrowserId(),
-          browsers
-        ),
-        openUrl: (url, browserId) => void openExternalUrl(url, { browserId }),
-        copyText: (text) => clipboard.writeText(text)
-      })
+    // Never wait on a rescan: a late scan would pop a stale menu over newer input.
+    const browsers = readInstalledBrowserSnapshot()
+    open({
+      canOpenInOrca,
+      browsers,
+      externalDefaultName: resolveInstalledBrowserName(readConfiguredExternalBrowserId(), browsers),
+      openUrl: (url, browserId) => void openExternalUrl(url, { browserId }),
+      copyText: (text) => clipboard.writeText(text)
     })
   }
 

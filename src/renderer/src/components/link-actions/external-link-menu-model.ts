@@ -10,7 +10,8 @@ export type ExternalLinkMenuTarget = {
   url: string
   /** Workspace whose Orca browser would open the link; null offers only external browsers. */
   worktreeId: string | null
-  sourceOwner: HttpLinkSourceOwner
+  /** Null when the surface cannot attribute the link: it opens externally exactly as written. */
+  sourceOwner: HttpLinkSourceOwner | null
   /** Whether a runtime or SSH owner can reach Orca's managed browser for this workspace. */
   canOpenOwnedBrowser: boolean
 }
@@ -37,10 +38,23 @@ export function buildExternalLinkMenuModel(
   installedBrowsers: readonly InstalledBrowser[] | null
 ): ExternalLinkMenuModel {
   const { url, worktreeId, sourceOwner } = target
+  const openExternally = (browserId?: string): void => {
+    if (!sourceOwner) {
+      // Unattributed: skip local localhost labels, which would borrow a local workspace's port.
+      void (browserId ? window.api.shell.openUrl(url, browserId) : window.api.shell.openUrl(url))
+      return
+    }
+    openRoutedHttpLink(url, {
+      worktreeId,
+      sourceOwner,
+      forceDestination: 'system',
+      ...(browserId ? { browserId } : {})
+    })
+  }
   return {
     url,
     orcaBrowser:
-      worktreeId && canSourceOwnerOpenInOrca(sourceOwner, target.canOpenOwnedBrowser)
+      worktreeId && sourceOwner && canSourceOwnerOpenInOrca(sourceOwner, target.canOpenOwnedBrowser)
         ? {
             id: 'orca',
             name: httpLinkDestinationLabel('orca'),
@@ -51,18 +65,12 @@ export function buildExternalLinkMenuModel(
     externalDefault: {
       id: 'system',
       name: httpLinkDestinationLabel('system'),
-      open: () => openRoutedHttpLink(url, { worktreeId, sourceOwner, forceDestination: 'system' })
+      open: () => openExternally()
     },
     installedBrowsers: (installedBrowsers ?? []).map((browser) => ({
       id: browser.id,
       name: browser.name,
-      open: () =>
-        openRoutedHttpLink(url, {
-          worktreeId,
-          sourceOwner,
-          forceDestination: 'system',
-          browserId: browser.id
-        })
+      open: () => openExternally(browser.id)
     }))
   }
 }

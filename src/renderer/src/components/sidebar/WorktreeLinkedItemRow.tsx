@@ -98,6 +98,7 @@ export function WorktreeLinkedItemRow({
                 size="icon-xs"
                 aria-label={translate('workspace.links.openItem', 'Open {{label}}', { label })}
                 data-orca-external-url={item.url}
+                data-orca-link-worktree-id={workspace?.id}
                 onClick={() => void window.api.shell.openUrl(item.url ?? '')}
               >
                 <ExternalLink className="size-3" />

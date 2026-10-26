@@ -5,9 +5,15 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { resolveNativeChatHttpLinkRouting } from '@/components/native-chat/native-chat-link-target-actions'
 import { useAppStore } from '@/store'
 import { ExternalLinkMenuItems } from './ExternalLinkMenuItems'
 import type { ExternalLinkMenuTarget } from './external-link-menu-model'
+import {
+  decodeLinkSourceOwner,
+  LINK_OWNER_ATTRIBUTE,
+  LINK_WORKTREE_ATTRIBUTE
+} from './link-source-attributes'
 import { parseHttpUrl } from '../../../../shared/external-browser-types'
 
 /** Marks a PR/issue control that opens a URL from onClick so right-click offers the link menu. */
@@ -31,6 +37,31 @@ function isInsideEditable(element: Element): boolean {
   )
 }
 
+/** The link's own owner and workspace; null when it is unknown, which left-click also refuses. */
+function linkMenuTarget(link: Element, url: string): ExternalLinkMenuTarget | null {
+  const source = link.closest(`[${LINK_OWNER_ATTRIBUTE}], [${LINK_WORKTREE_ATTRIBUTE}]`)
+  const worktreeId = source?.getAttribute(LINK_WORKTREE_ATTRIBUTE) || null
+  const publishedOwner = source?.getAttribute(LINK_OWNER_ATTRIBUTE)
+  if (publishedOwner != null) {
+    const sourceOwner = decodeLinkSourceOwner(publishedOwner)
+    // Preview left-clicks never route a remote owner into Orca's browser.
+    return sourceOwner.kind === 'unknown'
+      ? null
+      : { url, worktreeId, sourceOwner, canOpenOwnedBrowser: false }
+  }
+  if (worktreeId) {
+    const { sourceOwner, destinations } = resolveNativeChatHttpLinkRouting(
+      useAppStore.getState(),
+      worktreeId
+    )
+    const canOpenInOrca = destinations.primary === 'orca' || destinations.alternate === 'orca'
+    return sourceOwner.kind === 'unknown'
+      ? null
+      : { url, worktreeId, sourceOwner, canOpenOwnedBrowser: canOpenInOrca }
+  }
+  return { url, worktreeId: null, sourceOwner: null, canOpenOwnedBrowser: false }
+}
+
 /** Opens the shared link menu for right-clicked http(s) anchors and marked PR/issue controls. */
 function useGlobalExternalLinkContextMenu(): {
   menu: GlobalExternalLinkMenu | null
@@ -42,19 +73,15 @@ function useGlobalExternalLinkContextMenu(): {
   const close = useCallback(() => setMenu(null), [])
 
   useEffect(() => {
-    const open = (event: MouseEvent, url: string): void => {
+    const open = (event: MouseEvent, link: Element, url: string): void => {
       event.preventDefault()
+      const target = linkMenuTarget(link, url)
+      if (!target) {
+        return
+      }
       window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
       openedAtRef.current = Date.now()
-      setMenu({
-        target: {
-          url,
-          worktreeId: useAppStore.getState().activeWorktreeId,
-          sourceOwner: { kind: 'local' },
-          canOpenOwnedBrowser: false
-        },
-        point: { x: event.clientX, y: event.clientY }
-      })
+      setMenu({ target, point: { x: event.clientX, y: event.clientY } })
     }
     const linkTargetElement = (event: MouseEvent): Element | null => {
       if (event.defaultPrevented) {
@@ -67,17 +94,17 @@ function useGlobalExternalLinkContextMenu(): {
     const onMarkedControlContextMenu = (event: MouseEvent): void => {
       const marked = linkTargetElement(event)?.closest(`[${EXTERNAL_URL_ATTRIBUTE}]`)
       const url = parseHttpUrl(marked?.getAttribute(EXTERNAL_URL_ATTRIBUTE))
-      if (url) {
+      if (marked && url) {
         event.stopPropagation()
-        open(event, url)
+        open(event, marked, url)
       }
     }
     // Bubble so surfaces with their own link menu (terminal, chat) handle anchors first.
     const onAnchorContextMenu = (event: MouseEvent): void => {
       const anchor = linkTargetElement(event)?.closest('a[href]')
       const url = parseHttpUrl(anchor?.getAttribute('href'))
-      if (url) {
-        open(event, url)
+      if (anchor && url) {
+        open(event, anchor, url)
       }
     }
     window.addEventListener('contextmenu', onMarkedControlContextMenu, true)
