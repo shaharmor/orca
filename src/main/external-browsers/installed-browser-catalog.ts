@@ -75,6 +75,6 @@ export async function findInstalledBrowser(id: string): Promise<DetectedBrowser 
   if (cached || !pendingScan) {
     return cached
   }
-  // Wait only on a rescan a missing or stale snapshot started, so a stale id rescans once per TTL.
+  // A miss waits only on an in-flight scan, so a missing id rescans at most once per TTL.
   return (await pendingScan).find((browser) => browser.id === id)
 }

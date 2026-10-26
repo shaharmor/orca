@@ -66,7 +66,6 @@ describe('installed browser catalog', () => {
     const catalog = await loadCatalog()
     readBrowsers.mockResolvedValueOnce([detected('chrome')])
 
-    // The first lookup waits on the first scan.
     expect((await catalog.findInstalledBrowser('chrome'))?.id).toBe('chrome')
     expect(await catalog.findInstalledBrowser('safari')).toBeUndefined()
     expect(readBrowsers).toHaveBeenCalledTimes(1)
