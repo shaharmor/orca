@@ -67,6 +67,16 @@ function NativeChatLinkContextMenu(): React.JSX.Element {
 export const linkMenu = defineFixture({
   width: 420,
   store: {
+    // A local repo owns the workspace; an unknown owner would hide the "Open in" submenu.
+    repos: [
+      {
+        id: 'fixture-worktree',
+        path: '/repo',
+        displayName: 'repo',
+        badgeColor: '#737373',
+        addedAt: 0
+      }
+    ],
     installedBrowsers: [
       { id: 'com.google.Chrome', name: 'Google Chrome' },
       { id: 'com.microsoft.edgemac', name: 'Microsoft Edge' },
