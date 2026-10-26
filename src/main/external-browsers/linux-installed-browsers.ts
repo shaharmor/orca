@@ -118,6 +118,8 @@ export function parseLinuxInstalledBrowsers(files: readonly DesktopEntryFile[]):
       entry.get('Type') !== 'Application' ||
       entry.get('Hidden') === 'true' ||
       entry.get('NoDisplay') === 'true' ||
+      // Detached launches have no terminal, so a text-mode browser would exit unseen.
+      entry.get('Terminal') === 'true' ||
       !mimeTypes.includes(HTTPS_HANDLER_MIME_TYPE) ||
       !name ||
       !exec

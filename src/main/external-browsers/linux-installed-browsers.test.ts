@@ -40,10 +40,11 @@ describe('parseLinuxInstalledBrowsers', () => {
     })
   })
 
-  it('skips hidden, NoDisplay, and non-https entries', () => {
+  it('skips hidden, NoDisplay, terminal, and non-https entries', () => {
     const browsers = parseLinuxInstalledBrowsers([
       { id: 'hidden.desktop', text: httpsHandler('Hidden', 'hidden %u', ['Hidden=true']) },
       { id: 'nodisplay.desktop', text: httpsHandler('NoDisplay', 'nodisplay', ['NoDisplay=true']) },
+      { id: 'w3m.desktop', text: httpsHandler('w3m', 'w3m %u', ['Terminal=true']) },
       {
         id: 'editor.desktop',
         text: desktopFile(['Name=Editor', 'Exec=editor %F', 'MimeType=x-scheme-handler/http;'])
