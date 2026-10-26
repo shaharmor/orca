@@ -10,6 +10,7 @@ vi.mock('./terminal-url-link-hit-testing', () => ({ findHttpLinkAtTerminalPointe
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
+import { setHoveredTerminalOscLink } from './terminal-osc-link-hover'
 
 function renderTrigger(rightClickToPaste: boolean) {
   const container = document.createElement('div')
@@ -50,7 +51,7 @@ function renderTrigger(rightClickToPaste: boolean) {
         stopPropagation: vi.fn()
       } as unknown as React.MouseEvent<HTMLDivElement>)
     )
-  return { result, rightClick, pasteResolvedPane }
+  return { result, rightClick, pasteResolvedPane, pane }
 }
 
 afterEach(() => {
@@ -81,6 +82,19 @@ describe('useTerminalContextMenuTrigger link targets', () => {
 
     expect(result.current.open).toBe(true)
     expect(result.current.linkTarget).toBeNull()
+  })
+
+  it('captures the hovered OSC 8 link, whose URI the text scan cannot see', () => {
+    findHttpLinkAtTerminalPointer.mockReturnValue(null)
+    const { result, rightClick, pane } = renderTrigger(false)
+
+    setHoveredTerminalOscLink(pane.terminal, 'file:///tmp/notes.txt')
+    rightClick()
+    expect(result.current.linkTarget).toBeNull()
+
+    setHoveredTerminalOscLink(pane.terminal, 'https://docs.example.com/guide')
+    rightClick()
+    expect(result.current.linkTarget?.url).toBe('https://docs.example.com/guide')
   })
 
   it('still pastes without a menu when right-click-to-paste is on over a URL', () => {

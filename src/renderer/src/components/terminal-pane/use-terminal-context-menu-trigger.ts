@@ -8,6 +8,7 @@ import {
   isTerminalRightClickPasteGesture
 } from './terminal-right-click-paste-gesture'
 import { findHttpLinkAtTerminalPointer } from './terminal-url-link-hit-testing'
+import { readHoveredTerminalOscHttpLink } from './terminal-osc-link-hover'
 import type { PtyTransport } from './pty-transport-types'
 import type { ExternalLinkMenuTarget } from '@/components/link-actions/external-link-menu-model'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
@@ -104,7 +105,8 @@ export function useTerminalContextMenuTrigger({
     menuOpenedAtRef.current = Date.now()
     const bounds = boundsElement.getBoundingClientRect()
     const linkUrl = clickedPane
-      ? findHttpLinkAtTerminalPointer(clickedPane.terminal, event.nativeEvent)
+      ? (findHttpLinkAtTerminalPointer(clickedPane.terminal, event.nativeEvent) ??
+        readHoveredTerminalOscHttpLink(clickedPane.terminal))
       : null
     // The pane's owner, so remote panes only offer reachable browsers.
     setLinkTarget(

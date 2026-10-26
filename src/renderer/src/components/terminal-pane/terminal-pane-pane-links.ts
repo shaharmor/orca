@@ -17,6 +17,7 @@ import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { handleOscLink } from './terminal-osc-link-routing'
+import { setHoveredTerminalOscLink } from './terminal-osc-link-hover'
 import { copyTerminalSelection } from './terminal-selection-copy'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from './terminal-native-copy-gutter'
@@ -191,6 +192,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       }
     },
     hover: (_event, text) => {
+      setHoveredTerminalOscLink(pane.terminal, text)
       oscTooltipHoverToken += 1
       const hoverToken = oscTooltipHoverToken
       const hint = getUrlOpenLinkHint(pane.id)
@@ -205,6 +207,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       )
     },
     leave: () => {
+      setHoveredTerminalOscLink(pane.terminal, null)
       oscTooltipHoverToken += 1
       pane.linkTooltip.style.display = 'none'
     }
