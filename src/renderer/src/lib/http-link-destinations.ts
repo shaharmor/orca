@@ -103,10 +103,13 @@ export type HttpLinkRoutingPreferenceRequester = (
 ) => boolean | Promise<boolean> | null | undefined
 
 export type RoutedHttpLinkOptions = {
-  worktreeId: string
+  /** Null when no workspace browser can open the link, so only external destinations apply. */
+  worktreeId: string | null
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
   forceDestination?: HttpLinkDestination
+  /** Installed browser for a forced system open; absent uses the configured external default. */
+  browserId?: string
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
 }
 
@@ -119,6 +122,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
+      browserId: deps.browserId,
       sourceOwner
     })
     return

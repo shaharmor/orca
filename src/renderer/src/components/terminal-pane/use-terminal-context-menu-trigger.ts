@@ -10,13 +10,14 @@ import {
 import { findHttpLinkAtTerminalPointer } from './terminal-url-link-hit-testing'
 import type { PtyTransport } from './pty-transport-types'
 import type { ExternalLinkMenuTarget } from '@/components/link-actions/external-link-menu-model'
-import { resolveTerminalLinkMenuTarget } from './terminal-link-menu-target'
+import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
 
 type UseTerminalContextMenuTriggerDeps = {
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   contextPaneIdRef: React.RefObject<number | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  canOpenOwnedBrowserForPaneRef: React.RefObject<(paneId: number) => boolean>
   worktreeId: string
   rightClickToPaste: boolean
   pasteResolvedPane: (
@@ -41,6 +42,7 @@ export function useTerminalContextMenuTrigger({
   containerRef,
   contextPaneIdRef,
   paneTransportsRef,
+  canOpenOwnedBrowserForPaneRef,
   worktreeId,
   rightClickToPaste,
   pasteResolvedPane
@@ -104,13 +106,17 @@ export function useTerminalContextMenuTrigger({
     const linkUrl = clickedPane
       ? findHttpLinkAtTerminalPointer(clickedPane.terminal, event.nativeEvent)
       : null
+    // The pane's owner, so remote panes only offer reachable browsers.
     setLinkTarget(
       clickedPane && linkUrl
-        ? resolveTerminalLinkMenuTarget(
-            linkUrl,
-            paneTransportsRef.current.get(clickedPane.id),
-            worktreeId
-          )
+        ? {
+            url: linkUrl,
+            worktreeId,
+            sourceOwner: resolveTerminalHttpLinkSourceOwner(
+              paneTransportsRef.current.get(clickedPane.id)
+            ),
+            canOpenOwnedBrowser: canOpenOwnedBrowserForPaneRef.current(clickedPane.id)
+          }
         : null
     )
     setPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })

@@ -149,7 +149,12 @@ describe('native chat right-click targets', () => {
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Open in' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Google Chrome' }))
-    expect(mocks.openUrl).toHaveBeenCalledWith('https://example.com/docs', 'chrome')
+    expect(mocks.openRoutedHttpLink).toHaveBeenCalledWith('https://example.com/docs', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' },
+      forceDestination: 'system',
+      browserId: 'chrome'
+    })
   })
 
   it('offers no "Open in" submenu for a file link', async () => {

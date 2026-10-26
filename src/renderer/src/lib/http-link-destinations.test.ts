@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InstalledBrowser } from '../../../shared/external-browser-types'
 
-const storeState = vi.hoisted(() => ({
-  settings: null as { externalBrowserId?: string | null } | null,
-  installedBrowsers: null as InstalledBrowser[] | null
-}))
+type StoreState = {
+  settings: { externalBrowserId?: string | null } | null
+  installedBrowsers: InstalledBrowser[] | null
+}
+const storeState = vi.hoisted((): StoreState => ({ settings: null, installedBrowsers: null }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
 
 import {

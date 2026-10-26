@@ -2,13 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InstalledBrowser } from '../../../../shared/external-browser-types'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
-const storeState = vi.hoisted(() => ({
-  settings: null as {
-    externalBrowserId?: string | null
-    localhostWorktreeLabelsEnabled?: boolean
-  } | null,
-  installedBrowsers: null as InstalledBrowser[] | null
-}))
+type StoreState = {
+  settings: { externalBrowserId?: string | null; localhostWorktreeLabelsEnabled?: boolean } | null
+  installedBrowsers: InstalledBrowser[] | null
+}
+const storeState = vi.hoisted((): StoreState => ({ settings: null, installedBrowsers: null }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
 
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'

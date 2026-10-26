@@ -2,7 +2,6 @@
 
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Editor } from '@tiptap/react'
 import type { RichMarkdownContextMenuCommandPayload } from '../../../../shared/rich-markdown-context-menu'
 import type * as HttpLinkDestinationsModule from '@/lib/http-link-destinations'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
@@ -22,7 +21,7 @@ function Harness({
   editor,
   sourceOwner
 }: {
-  editor: Editor
+  editor: Parameters<typeof useRichMarkdownLinkContextMenu>[0]
   sourceOwner: HttpLinkSourceOwner
 }): null {
   useRichMarkdownLinkContextMenu(editor, {
@@ -56,9 +55,7 @@ function setup(sourceOwner: HttpLinkSourceOwner) {
       }
     }
   })
-  // SAFETY: the hook reads only editor.view.dom.
-  const editor = { view: { dom: editorDom } } as unknown as Editor
-  render(<Harness editor={editor} sourceOwner={sourceOwner} />)
+  render(<Harness editor={{ view: { dom: editorDom } }} sourceOwner={sourceOwner} />)
   const runCommand = (payload: RichMarkdownContextMenuCommandPayload): void =>
     commandListeners.forEach((listener) => listener(payload))
   return { editorDom, setRichMarkdownContextMenuLinkTarget, runCommand }

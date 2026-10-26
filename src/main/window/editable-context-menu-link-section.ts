@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
   richMarkdownContextMenuCommandChannel,
   type RichMarkdownContextMenuCommandPayload,
@@ -29,16 +30,14 @@ export function readHttpLinkUrl(
   }
 }
 
+// zod numbers reject NaN and Infinity.
+const linkTargetSchema = z.object({ x: z.number(), y: z.number() })
+
 export function parseRichMarkdownContextMenuLinkTarget(
   value: unknown
 ): RichMarkdownContextMenuLinkTarget | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-  const { x, y } = value as Partial<RichMarkdownContextMenuLinkTarget>
-  return typeof x === 'number' && Number.isFinite(x) && typeof y === 'number' && Number.isFinite(y)
-    ? { x, y }
-    : null
+  const target = linkTargetSchema.safeParse(value)
+  return target.success ? target.data : null
 }
 
 function openInLabel(browser: string): string {

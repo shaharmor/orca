@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import { z } from 'zod'
 import type { DetectedBrowser } from './installed-browser-catalog'
 
 const OSASCRIPT_PATH = '/usr/bin/osascript'
@@ -22,10 +23,7 @@ for (let i = 0; i < appUrls.count; i++) {
 JSON.stringify(browsers)
 `
 
-function readString(record: object, key: 'id' | 'name'): string {
-  const value: unknown = Reflect.get(record, key)
-  return typeof value === 'string' ? value.trim() : ''
-}
+const jxaBrowserSchema = z.object({ id: z.string(), name: z.string() })
 
 export function parseMacInstalledBrowsers(output: string): DetectedBrowser[] {
   let parsed: unknown
@@ -39,12 +37,13 @@ export function parseMacInstalledBrowsers(output: string): DetectedBrowser[] {
   }
   const browsers = new Map<string, DetectedBrowser>()
   for (const entry of parsed) {
-    if (typeof entry !== 'object' || entry === null) {
+    const browser = jxaBrowserSchema.safeParse(entry)
+    if (!browser.success) {
       continue
     }
-    const id = readString(entry, 'id')
+    const id = browser.data.id.trim()
     // Finder shows the .app suffix when the user enables "Show all filename extensions".
-    const name = readString(entry, 'name').replace(/\.app$/i, '')
+    const name = browser.data.name.trim().replace(/\.app$/i, '')
     // The same app can be registered from several locations; keep LaunchServices' first.
     if (!id || !name || browsers.has(id)) {
       continue

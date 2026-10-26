@@ -20,16 +20,16 @@ const CATALOG_CACHE_TTL_MS = 30_000
 let catalogCache: { readAt: number; browsers: Promise<DetectedBrowser[]> } | undefined
 
 function readPlatformBrowsers(): Promise<DetectedBrowser[]> {
-  switch (process.platform) {
-    case 'darwin':
-      return readMacInstalledBrowsers()
-    case 'win32':
-      return readWindowsInstalledBrowsers()
-    case 'linux':
-      return readLinuxInstalledBrowsers()
-    default:
-      return Promise.resolve([])
+  if (process.platform === 'darwin') {
+    return readMacInstalledBrowsers()
   }
+  if (process.platform === 'win32') {
+    return readWindowsInstalledBrowsers()
+  }
+  if (process.platform === 'linux') {
+    return readLinuxInstalledBrowsers()
+  }
+  return Promise.resolve([])
 }
 
 export function listDetectedBrowsers(

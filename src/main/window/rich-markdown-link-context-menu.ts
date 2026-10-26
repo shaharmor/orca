@@ -17,7 +17,7 @@ import {
 export type RichMarkdownLinkContextMenu = {
   /** Opens now, or once the browser catalog loads when the menu is for an editable http(s) link. */
   withLinkActions: (
-    params: Electron.ContextMenuParams,
+    params: Pick<Electron.ContextMenuParams, 'x' | 'y' | 'isEditable' | 'linkURL'>,
     open: (link?: EditableContextMenuLinkActions) => void
   ) => void
   reset: () => void

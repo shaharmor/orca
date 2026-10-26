@@ -30,6 +30,7 @@ function renderTrigger(rightClickToPaste: boolean) {
       containerRef: { current: container },
       contextPaneIdRef: { current: null },
       paneTransportsRef: { current: new Map() },
+      canOpenOwnedBrowserForPaneRef: { current: () => false },
       worktreeId: 'wt-1',
       rightClickToPaste,
       pasteResolvedPane

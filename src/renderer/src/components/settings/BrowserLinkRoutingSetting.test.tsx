@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { isValidElement, type ReactElement } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -12,20 +13,19 @@ const BROWSERS: InstalledBrowser[] = [
   { id: 'com.microsoft.edgemac', name: 'Microsoft Edge' }
 ]
 
-type ElementLike = { type: unknown; props: Record<string, unknown> }
+type SelectElement = ReactElement<{ children?: unknown; onValueChange?: (value: string) => void }>
 
-function findSelect(node: unknown): ElementLike {
+function findSelect(node: unknown): SelectElement {
   const stack = [node]
   while (stack.length > 0) {
     const current = stack.pop()
     if (Array.isArray(current)) {
       stack.push(...current)
-    } else if (current && typeof current === 'object' && 'props' in current) {
-      const element = current as ElementLike
-      if (element.type === Select) {
-        return element
+    } else if (isValidElement<SelectElement['props']>(current)) {
+      if (current.type === Select) {
+        return current
       }
-      stack.push(element.props.children)
+      stack.push(current.props.children)
     }
   }
   throw new Error('link destination select not found')
@@ -67,7 +67,7 @@ describe('BrowserLinkRoutingSetting', () => {
       )
     )
 
-    ;(select.props.onValueChange as (value: string) => void)(value)
+    select.props.onValueChange?.(value)
 
     expect(updateSettings).toHaveBeenCalledWith({
       ...expected,

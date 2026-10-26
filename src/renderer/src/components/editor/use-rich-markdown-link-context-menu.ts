@@ -1,18 +1,10 @@
 import { useEffect, useRef } from 'react'
-import type { Editor } from '@tiptap/react'
-import { canSourceOwnerOpenInOrca, openRoutedHttpLink } from '@/lib/http-link-destinations'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import { useAppStore } from '@/store'
-import { canNativeChatOpenOwnedBrowser } from '../native-chat/native-chat-http-link-source-owner'
+import { openRoutedHttpLink } from '@/lib/http-link-destinations'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
-
-type CapturedLinkTarget = {
-  url: string
-  x: number
-  y: number
-  worktreeId: string
-  sourceOwner: HttpLinkSourceOwner
-}
+import {
+  resolveRichMarkdownOrcaLinkTarget,
+  type RichMarkdownOrcaLinkTarget
+} from './rich-markdown-editor-click-routing'
 
 function readHttpHref(anchor: Element | null): string | null {
   const href = anchor?.getAttribute('href')
@@ -29,10 +21,10 @@ function readHttpHref(anchor: Element | null): string | null {
 
 /** Tells main's native menu whether a right-clicked link can open in Orca Browser, and opens it there. */
 export function useRichMarkdownLinkContextMenu(
-  editor: Editor | null,
+  editor: { view: { dom: HTMLElement } } | null,
   linkContext: Pick<RichMarkdownHtmlSuperscriptLinkContext, 'getSnapshot'>
 ): void {
-  const capturedTargetRef = useRef<CapturedLinkTarget | null>(null)
+  const capturedTargetRef = useRef<RichMarkdownOrcaLinkTarget | null>(null)
 
   useEffect(() => {
     if (!editor) {
@@ -40,28 +32,13 @@ export function useRichMarkdownLinkContextMenu(
     }
     const editorDom = editor.view.dom
     const captureTarget = (event: MouseEvent): void => {
-      capturedTargetRef.current = null
       const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
       const url = anchor && editorDom.contains(anchor) ? readHttpHref(anchor) : null
-      const { worktreeId, sourceOwner } = linkContext.getSnapshot()
-      const canOpenInOrca =
-        url !== null &&
-        canSourceOwnerOpenInOrca(
-          sourceOwner,
-          canNativeChatOpenOwnedBrowser(useAppStore.getState(), worktreeId, sourceOwner)
-        )
-      if (!url || !canOpenInOrca) {
-        window.api.ui.setRichMarkdownContextMenuLinkTarget(null)
-        return
-      }
-      capturedTargetRef.current = {
-        url,
-        x: event.clientX,
-        y: event.clientY,
-        worktreeId,
-        sourceOwner
-      }
-      window.api.ui.setRichMarkdownContextMenuLinkTarget({ x: event.clientX, y: event.clientY })
+      const target = resolveRichMarkdownOrcaLinkTarget(url, event, linkContext.getSnapshot())
+      capturedTargetRef.current = target
+      window.api.ui.setRichMarkdownContextMenuLinkTarget(
+        target ? { x: target.x, y: target.y } : null
+      )
     }
     const unsubscribe = window.api.ui.onRichMarkdownContextCommand((payload) => {
       if (payload.command !== 'open-link-in-orca-browser') {

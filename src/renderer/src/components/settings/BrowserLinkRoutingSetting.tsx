@@ -95,7 +95,7 @@ export function BrowserLinkRoutingSetting({
         disabled={loading}
         onValueChange={(next) => updateSettings(linkDestinationUpdates(next))}
       >
-        <SelectTrigger aria-label={title} className="h-7 w-56 shrink-0 text-xs">
+        <SelectTrigger aria-label={title} className="h-7 w-56 shrink-0">
           <SelectValue
             placeholder={translate(
               'auto.components.settings.BrowserLinkRoutingSetting.loadingBrowsers',
@@ -104,13 +104,13 @@ export function BrowserLinkRoutingSetting({
           />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ORCA_VALUE} className="text-xs">
+          <SelectItem value={ORCA_VALUE}>
             {translate(
               'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
               'Orca Browser'
             )}
           </SelectItem>
-          <SelectItem value={SYSTEM_VALUE} className="text-xs">
+          <SelectItem value={SYSTEM_VALUE}>
             {translate(
               'auto.components.settings.BrowserLinkRoutingSetting.systemDefaultBrowser',
               'System default browser'
@@ -118,16 +118,12 @@ export function BrowserLinkRoutingSetting({
           </SelectItem>
           {installedBrowsers?.length || missingBrowserId ? <SelectSeparator /> : null}
           {installedBrowsers?.map((browser) => (
-            <SelectItem
-              key={browser.id}
-              value={`${BROWSER_VALUE_PREFIX}${browser.id}`}
-              className="text-xs"
-            >
+            <SelectItem key={browser.id} value={`${BROWSER_VALUE_PREFIX}${browser.id}`}>
               {browser.name}
             </SelectItem>
           ))}
           {missingBrowserId ? (
-            <SelectItem value={`${BROWSER_VALUE_PREFIX}${missingBrowserId}`} className="text-xs">
+            <SelectItem value={`${BROWSER_VALUE_PREFIX}${missingBrowserId}`}>
               {translate(
                 'auto.components.settings.BrowserLinkRoutingSetting.unavailableBrowser',
                 'Unavailable browser (using system default)'

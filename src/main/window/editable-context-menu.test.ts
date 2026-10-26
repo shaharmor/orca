@@ -297,8 +297,10 @@ describe('buildEditableContextMenuTemplate', () => {
       copyText: vi.fn(),
       ...overrides
     })
-    const click = (item: Electron.MenuItemConstructorOptions): void =>
-      item.click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
+    // Link actions ignore Electron's click arguments.
+    const click = (item: { click?: (...args: never[]) => void }): void => item.click?.()
+    const submenu = (item: Electron.MenuItemConstructorOptions) =>
+      Array.isArray(item.submenu) ? item.submenu : []
     const labels = (template: Electron.MenuItemConstructorOptions[]) =>
       template.map((item) => item.label ?? item.role ?? item.type)
 
@@ -331,7 +333,7 @@ describe('buildEditableContextMenuTemplate', () => {
       })
       click(template[1])
       expect(link.openUrl).toHaveBeenLastCalledWith(url)
-      const openIn = template[2].submenu as Electron.MenuItemConstructorOptions[]
+      const openIn = submenu(template[2])
       expect(labels(openIn)).toEqual(['Google Chrome', 'Safari'])
       click(openIn[1])
       expect(link.openUrl).toHaveBeenLastCalledWith(url, 'com.apple.Safari')

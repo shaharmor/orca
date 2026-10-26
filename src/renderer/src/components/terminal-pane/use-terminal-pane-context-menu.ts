@@ -35,6 +35,7 @@ import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  canOpenOwnedBrowserForPaneRef: React.RefObject<(paneId: number) => boolean>
   paneCwdRef: React.RefObject<PaneCwdMap>
   containerRef: React.RefObject<HTMLDivElement | null>
   tabId: string
@@ -81,6 +82,7 @@ type TerminalMenuState = TerminalContextMenuTrigger & {
 export function useTerminalPaneContextMenu({
   managerRef,
   paneTransportsRef,
+  canOpenOwnedBrowserForPaneRef,
   paneCwdRef,
   containerRef,
   tabId,
@@ -134,6 +136,7 @@ export function useTerminalPaneContextMenu({
     containerRef,
     contextPaneIdRef,
     paneTransportsRef,
+    canOpenOwnedBrowserForPaneRef,
     worktreeId,
     rightClickToPaste,
     pasteResolvedPane

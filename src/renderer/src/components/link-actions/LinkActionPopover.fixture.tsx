@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../shared/constants'
 import { buildHttpLinkActions } from '@/lib/http-link-destinations'
+import { useAppStore } from '@/store'
 import { LinkActionPopover } from './LinkActionPopover'
 import type { LinkActionRequest } from './link-action-request'
 
@@ -31,11 +31,13 @@ export const urlLink = defineFixture({
 export const urlLinkConfiguredBrowser = defineFixture({
   width: 380,
   store: {
-    settings: {
-      ...getDefaultSettings('/home/fixture'),
-      externalBrowserId: 'com.microsoft.edgemac'
-    },
     installedBrowsers: [{ id: 'com.microsoft.edgemac', name: 'Microsoft Edge' }]
+  },
+  setup: () => {
+    const { settings } = useAppStore.getState()
+    useAppStore.setState({
+      settings: settings && { ...settings, externalBrowserId: 'com.microsoft.edgemac' }
+    })
   },
   render: () => (
     <div className="h-[150px]">

@@ -3,7 +3,7 @@ import {
   httpLinkDestinationLabel,
   openRoutedHttpLink
 } from '@/lib/http-link-destinations'
-import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import type { InstalledBrowser } from '../../../../shared/external-browser-types'
 
 export type ExternalLinkMenuTarget = {
@@ -51,13 +51,18 @@ export function buildExternalLinkMenuModel(
     externalDefault: {
       id: 'system',
       name: httpLinkDestinationLabel('system'),
-      open: () => openHttpLink(url, { forceSystemBrowser: true, sourceOwner })
+      open: () => openRoutedHttpLink(url, { worktreeId, sourceOwner, forceDestination: 'system' })
     },
     installedBrowsers: (installedBrowsers ?? []).map((browser) => ({
       id: browser.id,
       name: browser.name,
       open: () =>
-        openHttpLink(url, { forceSystemBrowser: true, browserId: browser.id, sourceOwner })
+        openRoutedHttpLink(url, {
+          worktreeId,
+          sourceOwner,
+          forceDestination: 'system',
+          browserId: browser.id
+        })
     }))
   }
 }

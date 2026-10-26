@@ -1,3 +1,4 @@
+import { BrowserWindow } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { richMarkdownContextMenuLinkTargetChannel } from '../../shared/rich-markdown-context-menu'
 import { installRichMarkdownLinkContextMenu } from './rich-markdown-link-context-menu'
@@ -5,6 +6,10 @@ import { installRichMarkdownLinkContextMenu } from './rich-markdown-link-context
 const ipcListeners = vi.hoisted(() => new Map<string, (...args: unknown[]) => void>())
 const openExternalUrl = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('electron', () => ({
+  // The module reads only mainWindow.webContents for sender checks.
+  BrowserWindow: class {
+    webContents = {}
+  },
   clipboard: { writeText: vi.fn() },
   ipcMain: {
     on: (channel: string, listener: (...args: unknown[]) => void) =>
@@ -24,19 +29,18 @@ vi.mock('../external-browsers/open-external-url', () => ({
   readConfiguredExternalBrowserId: () => 'com.microsoft.edgemac'
 }))
 
-const webContents = {}
-// SAFETY: the module reads only mainWindow.webContents for sender checks.
-const mainWindow = { webContents } as unknown as Electron.BrowserWindow
+const mainWindow = new BrowserWindow()
 
-function params(overrides: Partial<Electron.ContextMenuParams> = {}): Electron.ContextMenuParams {
-  // SAFETY: the module reads only these context-menu fields.
+function params(
+  overrides: Partial<Electron.ContextMenuParams> = {}
+): Pick<Electron.ContextMenuParams, 'x' | 'y' | 'isEditable' | 'linkURL'> {
   return {
     x: 12,
     y: 34,
     isEditable: true,
     linkURL: 'https://github.com/o/r/pull/1',
     ...overrides
-  } as Electron.ContextMenuParams
+  }
 }
 
 describe('installRichMarkdownLinkContextMenu', () => {
@@ -48,7 +52,7 @@ describe('installRichMarkdownLinkContextMenu', () => {
   it('offers Orca Browser only for the link the renderer reported, with the catalog loaded', async () => {
     const menu = installRichMarkdownLinkContextMenu(mainWindow)
     ipcListeners.get(richMarkdownContextMenuLinkTargetChannel)?.(
-      { sender: webContents },
+      { sender: mainWindow.webContents },
       {
         x: 12,
         y: 34
