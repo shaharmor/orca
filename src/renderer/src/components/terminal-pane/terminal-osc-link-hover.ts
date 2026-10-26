@@ -12,7 +12,6 @@ export function setHoveredTerminalOscLink(terminal: Terminal, uri: string | null
   }
 }
 
-/** The http(s) OSC 8 link under the pointer, or null. */
 export function readHoveredTerminalOscHttpLink(terminal: Terminal): string | null {
   return parseHttpUrl(hoveredOscLinks.get(terminal))
 }
