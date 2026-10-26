@@ -22,7 +22,8 @@ const mocks = vi.hoisted(() => ({
   writeClipboardText: vi.fn(),
   confirm: vi.fn(),
   appendText: vi.fn(),
-  openUrl: vi.fn()
+  openUrl: vi.fn(),
+  resolveSourceOwner: vi.fn()
 }))
 
 vi.mock('@/lib/http-link-destinations', async (importOriginal) => ({
@@ -34,7 +35,7 @@ vi.mock('@/components/terminal-pane/terminal-file-open-routing', async (importOr
   openDetectedFilePath: mocks.openDetectedFilePath
 }))
 vi.mock('./native-chat-http-link-source-owner', () => ({
-  resolveNativeChatHttpLinkSourceOwner: () => ({ kind: 'local' }),
+  resolveNativeChatHttpLinkSourceOwner: () => mocks.resolveSourceOwner(),
   canNativeChatOpenOwnedBrowser: () => false
 }))
 vi.mock('@/components/confirmation-dialog-context', () => ({
@@ -104,6 +105,7 @@ beforeEach(() => {
   })
   mocks.writeClipboardText.mockResolvedValue(undefined)
   mocks.openUrl.mockResolvedValue(undefined)
+  mocks.resolveSourceOwner.mockReturnValue({ kind: 'local' })
   useAppStore.setState({
     installedBrowsers: [
       { id: 'chrome', name: 'Google Chrome' },
@@ -161,6 +163,15 @@ describe('native chat right-click targets', () => {
     render(<Chat onFind={vi.fn()} />)
     await rightClick('app file')
 
+    expect(menuItemNames()).not.toContain('Open in')
+  })
+
+  it('offers no "Open in" submenu when the link owner is unknown', async () => {
+    mocks.resolveSourceOwner.mockReturnValue({ kind: 'unknown' })
+    render(<Chat onFind={vi.fn()} />)
+    await rightClick('docs link')
+
+    expect(menuItemNames()).toContain('Copy link')
     expect(menuItemNames()).not.toContain('Open in')
   })
 
