@@ -62,14 +62,16 @@ describe('installed browser catalog', () => {
     )
   })
 
-  it('rescans for a browser id only when the snapshot lacks it', async () => {
+  it('rescans for a missing browser id only once the snapshot is stale', async () => {
     const catalog = await loadCatalog()
     readBrowsers.mockResolvedValueOnce([detected('chrome')])
-    await catalog.listInstalledBrowsers()
 
+    // The first lookup waits on the first scan.
     expect((await catalog.findInstalledBrowser('chrome'))?.id).toBe('chrome')
+    expect(await catalog.findInstalledBrowser('safari')).toBeUndefined()
     expect(readBrowsers).toHaveBeenCalledTimes(1)
 
+    vi.setSystemTime(60_000)
     readBrowsers.mockResolvedValueOnce([detected('chrome'), detected('safari')])
     expect((await catalog.findInstalledBrowser('safari'))?.id).toBe('safari')
     expect(readBrowsers).toHaveBeenCalledTimes(2)

@@ -72,9 +72,9 @@ export async function listInstalledBrowsers(
 
 export async function findInstalledBrowser(id: string): Promise<DetectedBrowser | undefined> {
   const cached = readDetectedBrowserSnapshot().find((browser) => browser.id === id)
-  if (cached) {
+  if (cached || !pendingScan) {
     return cached
   }
-  // Rescan before giving up: the browser may have been installed since the last scan.
-  return (await scanBrowsers()).find((browser) => browser.id === id)
+  // Wait only on a rescan a missing or stale snapshot started, so a stale id rescans once per TTL.
+  return (await pendingScan).find((browser) => browser.id === id)
 }
